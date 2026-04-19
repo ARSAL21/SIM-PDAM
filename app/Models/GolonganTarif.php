@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class GolonganTarif extends Model
 {
     use HasFactory;
+    
+    protected $table = 'golongan_tarif';
 
     public function pelanggans(): HasMany
     {
