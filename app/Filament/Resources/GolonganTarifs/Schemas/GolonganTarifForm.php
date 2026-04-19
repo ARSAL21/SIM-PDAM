@@ -13,6 +13,7 @@ class GolonganTarifForm
             ->components([
                 TextInput::make('nama_golongan')
                     ->required()
+                    ->unique(ignoreRecord: true)
                     ->maxLength(255)
                     ->label('Nama Golongan'),
                 TextInput::make('tarif_per_kubik')
