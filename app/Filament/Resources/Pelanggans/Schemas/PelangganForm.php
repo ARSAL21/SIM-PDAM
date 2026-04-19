@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\Pelanggans\Schemas;
 
+use App\Models\Pelanggan;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 class PelangganForm
 {
@@ -17,7 +19,16 @@ class PelangganForm
                 // ── Grup Autentikasi ──
                 Select::make('user_id')
                     ->label('Akun User')
-                    ->relationship(name: 'user', titleAttribute: 'name')
+                    ->relationship(
+                        name: 'user', 
+                        titleAttribute: 'name',
+                        // SAKTI: Memfilter dropdown agar aman dari Error 500
+                        modifyQueryUsing: fn (Builder $query) => $query
+                            // 1. Jangan tampilkan user yang sudah punya data pelanggan
+                            ->whereDoesntHave('pelanggan')
+                            // 2. Jangan tampilkan user yang punya role adminPDAM / super_admin
+                            ->whereDoesntHave('roles', fn($q) => $q->whereIn('name', ['admin-PDAM', 'super_admin']))
+                    )
                     ->searchable()
                     ->preload()
                     ->required()
@@ -41,10 +52,15 @@ class PelangganForm
                 // ── Identitas Pelanggan ──
                 TextInput::make('no_pelanggan')
                     ->label('No. Pelanggan')
+                    // AUTO-GENERATE: Format PAM-TahunBulan-NomorUrut (Cth: PAM-2604-0001)
+                    ->default(function () {
+                        $lastId = Pelanggan::max('id') ?? 0;
+                        return 'PAM-' . date('ym') . '-' . str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
+                    })
+                    ->disabled() // Dikunci agar admin tidak bisa mengetik manual
+                    ->dehydrated() // WAJIB ADA agar data yang dikunci tetap dikirim ke database
                     ->required()
-                    ->unique(ignoreRecord: true)
-                    ->maxLength(255)
-                    ->placeholder('Contoh: PLG-0001'),
+                    ->unique(ignoreRecord: true),
 
                 // ── Kategori ──
                 Select::make('golongan_tarif_id')
