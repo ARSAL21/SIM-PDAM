@@ -47,6 +47,12 @@ class PelangganForm
                             ->password()
                             ->required()
                             ->minLength(8),
+                        Select::make('roles')
+                            ->relationship('roles', 'name')
+                            ->multiple()
+                            ->preload()
+                            ->searchable()
+                            ->label('Role/Hak Akses (Opsional)'),
                     ]),
 
                 // ── Identitas Pelanggan ──

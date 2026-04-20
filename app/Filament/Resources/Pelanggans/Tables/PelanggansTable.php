@@ -57,6 +57,13 @@ class PelanggansTable
                     ->relationship('golonganTarif', 'nama_golongan')
                     ->searchable()
                     ->preload(),
+                
+                // ── Filter Status Aktif ──
+                \Filament\Tables\Filters\TernaryFilter::make('status_aktif')
+                    ->label('Status Langganan')
+                    ->placeholder('Semua Pelanggan')
+                    ->trueLabel('Aktif Saja')
+                    ->falseLabel('Non-Aktif Saja'),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([

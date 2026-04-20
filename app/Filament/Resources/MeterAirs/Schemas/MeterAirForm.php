@@ -22,6 +22,7 @@ class MeterAirForm
                         titleAttribute: 'no_pelanggan',
                         modifyQueryUsing: fn (Builder $query, string $operation) => 
                             $query->with('user')
+                                ->where('status_aktif', true)
                                 ->when($operation === 'create', function ($q) {
                                     //Hanya tampilkan pelanggan yang TIDAK punya meteran 'Aktif'
                                     $q->whereDoesntHave('meterAirs', function ($subQuery) {
@@ -55,6 +56,8 @@ class MeterAirForm
                     ->minValue(0)
                     ->default(0)
                     ->required()
+                    ->disabledOn('edit')
+                    ->dehydrated(true)
                     ->helperText('Angka pada meteran saat pertama kali dipasang ke rumah pelanggan.'),
 
                 Select::make('status')
@@ -65,7 +68,24 @@ class MeterAirForm
                         'Diganti' => 'Diganti',
                     ])
                     ->default('Aktif')
-                    ->required(),
+                    ->required()
+                    ->rules([
+                        fn (\Filament\Forms\Get $get, ?Model $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                            if ($value === 'Aktif') {
+                                $pelangganId = $get('pelanggan_id');
+                                if (!$pelangganId) return;
+
+                                $hasActive = \App\Models\MeterAir::where('pelanggan_id', $pelangganId)
+                                    ->where('status', 'Aktif')
+                                    ->when($record, fn($q) => $q->where('id', '!=', $record->id))
+                                    ->exists();
+
+                                if ($hasActive) {
+                                    $fail('Gagal menyimpan. Pelanggan ini sudah memiliki alat meter berstatus Aktif lainnya.');
+                                }
+                            }
+                        },
+                    ]),
             ]);
     }
 }
