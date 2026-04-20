@@ -2,13 +2,17 @@
 
 namespace App\Filament\Resources\GolonganTarifs\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\DeleteBulkAction;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Filament\Tables\Actions\Action;
 
 class GolonganTarifsTable
 {
@@ -29,6 +33,10 @@ class GolonganTarifsTable
                     ->label('Biaya Admin')
                     ->money('IDR', locale: 'id')
                     ->sortable(),
+                TextColumn::make('pelanggans_count')
+                    ->label('Jumlah Pelanggan')
+                    ->counts('pelanggans')
+                    ->sortable(),
             ])
             ->filters([
                 //
@@ -36,11 +44,39 @@ class GolonganTarifsTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
-                DeleteAction::make(),
+                DeleteAction::make()
+                    ->before(function (Action $action, Model $record) {
+                        if ($record->pelanggans()->exists()) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Aksi Ditolak!')
+                                ->body('Golongan tarif ini tidak dapat dihapus karena masih digunakan oleh pelanggan.')
+                                ->send();
+
+                            $action->cancel();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->action(function (Collection $records, DeleteBulkAction $action) {
+                            $used = $records->filter(fn (Model $record) => $record->pelanggans()->exists());
+
+                            if ($used->isNotEmpty()) {
+                                Notification::make()
+                                    ->danger()
+                                    ->title('Aksi Sebagian Ditolak!')
+                                    ->body("{$used->count()} golongan tarif tidak dapat dihapus karena masih digunakan pelanggan.")
+                                    ->send();
+                                
+                                // Hapus yang aman saja
+                                $safeRecords = $records->diff($used);
+                                $safeRecords->each->delete();
+                            } else {
+                                $records->each->delete();
+                            }
+                        }),
                 ]),
             ]);
     }
