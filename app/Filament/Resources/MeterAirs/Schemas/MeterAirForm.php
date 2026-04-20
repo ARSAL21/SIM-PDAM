@@ -23,7 +23,7 @@ class MeterAirForm
                         modifyQueryUsing: fn (Builder $query, string $operation) => 
                             $query->with('user')
                                 ->when($operation === 'create', function ($q) {
-                                    // SAKTI: Hanya tampilkan pelanggan yang TIDAK punya meteran 'Aktif'
+                                    //Hanya tampilkan pelanggan yang TIDAK punya meteran 'Aktif'
                                     $q->whereDoesntHave('meterAirs', function ($subQuery) {
                                         $subQuery->where('status', 'Aktif');
                                     });
@@ -52,6 +52,7 @@ class MeterAirForm
                 TextInput::make('angka_awal')
                     ->label('Angka Awal')
                     ->numeric()
+                    ->minValue(0)
                     ->default(0)
                     ->required()
                     ->helperText('Angka pada meteran saat pertama kali dipasang ke rumah pelanggan.'),
