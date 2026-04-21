@@ -22,7 +22,7 @@ class PelangganForm
                     ->relationship(
                         name: 'user', 
                         titleAttribute: 'name',
-                        // SAKTI: Memfilter dropdown agar aman dari Error 500
+                        // Memfilter dropdown agar aman dari Error 500
                         modifyQueryUsing: fn (Builder $query) => $query
                             // 1. Jangan tampilkan user yang sudah punya data pelanggan
                             ->whereDoesntHave('pelanggan')
@@ -48,11 +48,17 @@ class PelangganForm
                             ->required()
                             ->minLength(8),
                         Select::make('roles')
-                            ->relationship('roles', 'name')
+                            ->relationship(
+                                name: 'roles', 
+                                titleAttribute: 'name',
+                                // Filter agar role admin-PDAM tidak muncul di pilihan manapun
+                                modifyQueryUsing: fn (Builder $query) => $query->where('name', '!=', 'admin-PDAM')
+                            )
                             ->multiple()
+                            ->required()
                             ->preload()
                             ->searchable()
-                            ->label('Role/Hak Akses (Opsional)'),
+                            ->label('Role/Hak Akses'),
                     ]),
 
                 // ── Identitas Pelanggan ──

@@ -31,6 +31,12 @@ class MeterAirsTable
                     ->searchable()
                     ->copyable(),
 
+                TextColumn::make('merek')
+                    ->label('Merek')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
+
                 TextColumn::make('tanggal_pasang')
                     ->label('Tgl Pasang')
                     ->date()
