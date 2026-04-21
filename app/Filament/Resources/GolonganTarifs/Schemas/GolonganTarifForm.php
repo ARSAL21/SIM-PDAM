@@ -18,12 +18,14 @@ class GolonganTarifForm
                     ->label('Nama Golongan'),
                 TextInput::make('tarif_per_kubik')
                     ->required()
+                    ->minValue(0)
                     ->numeric()
                     ->default(7000)
                     ->prefix('Rp')
                     ->label('Tarif per Kubik'),
                 TextInput::make('biaya_admin')
                     ->required()
+                    ->minValue(0)
                     ->numeric()
                     ->default(0)
                     ->prefix('Rp')

@@ -31,17 +31,22 @@ class UserForm
                     ->required(fn (string $operation): bool => $operation === 'create'),
                 Select::make('roles')
                     ->label('Peran (Roles)')
+                    ->required()
                     ->relationship(
                         name: 'roles', 
                         titleAttribute: 'name',
-                        // SAKTI: Filter agar role admin-PDAM tidak muncul di pilihan manapun
+                        // Filter agar role admin-PDAM tidak muncul di pilihan manapun
                         modifyQueryUsing: fn (Builder $query) => $query->where('name', '!=', 'admin-PDAM')
                     )
                     ->multiple()
                     ->preload()
                     ->searchable()
-                    // Opsional: Hanya izinkan admin yang login untuk melihat field ini
-                    ->visible(fn () => auth()->user()->hasRole('admin-PDAM'))
+                    // Hanya izinkan admin yang login untuk melihat field ini
+                    ->visible(function () {
+                        /** @var \App\Models\User $user */
+                        $user = auth()->user();
+                        return $user && $user->hasRole('admin-PDAM');
+                    })
             ]);
     }
 }

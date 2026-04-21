@@ -5,6 +5,7 @@ namespace App\Filament\Resources\MeterAirs\Schemas;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -70,7 +71,7 @@ class MeterAirForm
                     ->default('Aktif')
                     ->required()
                     ->rules([
-                        fn (\Filament\Forms\Get $get, ?Model $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                        fn (Get $get, ?Model $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                             if ($value === 'Aktif') {
                                 $pelangganId = $get('pelanggan_id');
                                 if (!$pelangganId) return;
