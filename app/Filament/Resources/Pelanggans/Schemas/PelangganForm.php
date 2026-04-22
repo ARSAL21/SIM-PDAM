@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Pelanggans\Schemas;
 
 use App\Models\Pelanggan;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -23,14 +24,15 @@ class PelangganForm
                         name: 'user', 
                         titleAttribute: 'name',
                         // Memfilter dropdown agar aman dari Error 500
-                        modifyQueryUsing: fn (Builder $query) => $query
-                            // 1. Jangan tampilkan user yang sudah punya data pelanggan
-                            ->whereDoesntHave('pelanggan')
+                        modifyQueryUsing: fn (Builder $query, string $operation) => $query
+                            // 1. Jika sedang membuat (create), jangan tampilkan user yang sudah punya data pelanggan
+                            ->when($operation === 'create', fn($q) => $q->whereDoesntHave('pelanggan'))
                             // 2. Jangan tampilkan user yang punya role adminPDAM / super_admin
                             ->whereDoesntHave('roles', fn($q) => $q->whereIn('name', ['admin-PDAM', 'super_admin']))
                     )
                     ->searchable()
                     ->preload()
+                    ->disabledOn('edit')
                     ->required()
                     ->createOptionForm([
                         TextInput::make('name')
@@ -59,7 +61,8 @@ class PelangganForm
                             ->preload()
                             ->searchable()
                             ->label('Role/Hak Akses'),
-                    ]),
+                    ])
+                    ->createOptionAction(fn (Action $action, string $operation) => $action->visible($operation === 'create')),
 
                 // ── Identitas Pelanggan ──
                 TextInput::make('no_pelanggan')

@@ -1,41 +1,249 @@
-# Issue: Eksekusi Perbaikan Bug Sistem & Kesenjangan PRD (Tahap 1)
+# Issue: Perbaikan & Peningkatan Fitur Meter Air — Guard Delete,
+# Soft Delete, Filter, dan Integrasi Tampilan di Tabel Pelanggan
 
-## 📌 Deskripsi Masalah
+## 📌 Latar Belakang
 
-Menindaklanjuti hasil Testing sistem dari fungsionalitas yang baru dibangun (Sesuai dokumentasi PRD `Siam pdam feature documentation.md`), terdapat beberapa **celah keamanan UI (UX)** dan **celah logika fatal** yang memungkinkan data menjadi korup atau crash di kemudian hari. 
+Ditemukan bug critical: admin saat ini bisa menghapus record `meter_air`
+secara permanen tanpa batasan apapun. Karena FK di `pencatatan_meter`
+menggunakan `cascadeOnDelete`, penghapusan satu meter akan ikut menghapus
+seluruh riwayat bacaan dan berdampak pada integritas data tagihan historis.
 
-Issue ini ditujukan untuk menambal ke-$7$ Titik Celah tersebut secara simultan sebelum kita melangkah masuk ke dalam fitur Pembayaran & Pencatatan bulanan.
+Selain perbaikan bug, issue ini juga mencakup peningkatan UX pada resource
+`Pelanggan` untuk menampilkan status meter aktif dan navigasi langsung ke
+data meter.
 
 ---
 
-## 🛠️ Checklist Eksekusi Bug
+## 🐛 Task 1: Implementasi Soft Delete pada Model & Migration `MeterAir`
 
-### [Bug 1] Crash pada Aksi Hapus Golongan Tarif (GolonganTarifResource)
-- **Problem:** Tombol Hapus pada antarmuka *Filament* menampilkan layar _Fatal Error 500 (SQLSTATE ON DELETE RESTRICT)_ setiap kali Admin secara tidak sengaja/sengaja mencoba menghapus blok Golongan Tarif yang masih memiliki pelanggan aktif.
-- **Instruksi Perbaikan:** Pada menu `recordActions(DeleteAction::make())` dan `DeleteBulkAction`, tangkap kondisi validasi. Jika `$record->pelanggans()->exists()`, jangan izinkan _database query_ berjalan, namun munculkan UX Notifikasi *Error/Danger* Pop-up berwarna merah di antarmuka Admin (misal: `"Gagal. Golongan ini masih digunakan pelanggan!"`).
+Meter air tidak boleh dihapus secara fisik dari database dalam kondisi apapun.
+Gunakan Soft Delete sebagai mekanisme "nonaktifkan" tanpa kehilangan data.
 
-### [Bug 2] Kelahiran User Tanpa Peran / "Role Hantu" (PelangganResource)
-- **Problem:** Pada menu Buat Pelanggan Baru, ketika Admin membypass form User baru dengan menekan (➕) *CreateOptionForm*, akun langsung terdaftar namun **terlahir ke sistem tanpa Role** apapun. Akibatnya, fungsionalitas _Spattie Shield_ tidak mencakup mereka.
-- **Instruksi Perbaikan:** Buka file `PelangganForm.php`, lalu sisipkan parameter _Select dropdown_ `Roles` pada _array_ `createOptionForm([...])`, lengkap dengan relasi standar `->multiple()->preload()` persis seperti form standar `UserResource`. (Lebih bagus lagi jika secara default ia diberikan Role 'Pelanggan').
+### 1a. Tambah kolom `deleted_at` via migration baru
 
-### [Bug 3] Celah Manipulasi Pelanggan Non-Aktif (MeterAirResource)
-- **Problem:** Filter bawaan _Dropdown_ pelanggan saat pembuatan Meter Air hanya menolak nama orang yang punya meter aktif, *tetapi ironisnya membiarkan pelanggan yang sudah dicabut izinnya / terblokir* (`status_aktif = false`) untuk dipasangkan alat meter baru.
-- **Instruksi Perbaikan:** Di file `MeterAirForm.php`, tambahkan rantai query builder `->where('status_aktif', true)` sebelum mengeksekusi logika lanjutan di field `pelanggan_id`.
+```php
+// php artisan make:migration add_soft_deletes_to_meter_air_table
+Schema::table('meter_air', function (Blueprint $table) {
+    $table->softDeletes();
+});
+```
 
-### [Bug 4] Celah Menggandakan Meter Air lewat Fitur Edit (MeterAirResource)
-- **Problem:** Poin perlindungan Anti Double-Meter hanya kuat di fase _Create_. Jika Admin masuk ke mode _EDIT_ untuk mengutak-atik meteran lawas yang notabene berstatus `Rusak`, admin bisa sembarangan memindahkannya kembali menjadi status `Aktif` meskipun pelanggan yang bersangkutan **SUDAH** punya alat pengganti yang aktif.
-- **Instruksi Perbaikan:** Wajib menaruh **Custom Rule Validation (Closure)** di Form level untuk memasikan: *Tidak boleh ada penyimpanan* yang mana status form adalah 'Aktif', sementara `$record->pelanggan` memiliki relasi `meterAktif` lain.
+### 1b. Tambah trait `SoftDeletes` di model `MeterAir`
 
-### [Bug 5] Kerentanan Perubahan Angka Offset Meteran (MeterAirResource)
-- **Problem:** Angka awal / `angka_awal` masih terbuka rentan dan bisa diutak-atik sewaktu Admin berada di dalam *mode Edit Form*. Hal tersebut bisa memanipulasi rentang kalkulasi pada riwayat penagihan yang telah lama berjalan. 
-- **Instruksi Perbaikan:** Harus diunci! Tambahkan rantai `->disabledOn('edit')` di field input tersebut.
+```php
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-### [Bug 6] Kekurangan Tabel Parameter Visual (Berbagai Resource)
-Selesaikan hal-hal tertinggal berikut agar antarmuka sejalan sesuai PRD:
-- **`GolonganTarifsTable.php`:** Ketiadaan kolom _Jumlah Pelanggan_. Buat kolom pembaca agregat/kalkulasi via relasi (`pelanggans_count`).
-- **`MeterAirsTable.php`:** Ketiadaan indikator merek. Sisipkan `TextColumn` untuk memanjangkan display teks dari Field `merek`.
-- **`PelanggansTable.php`:** Tidak ada tombol cepat Filter pelanggan aktif. Buat klasifikasi filter via `TernaryFilter` untuk param `status_aktif`.
+class MeterAir extends Model
+{
+    use HasFactory, SoftDeletes;
+    // ...
+}
+```
 
-### [Bug 7] Hak Dasar Pembaruan Password "Super_Admin" Lumpuh (Security Enhancement)
-- **Problem:** Demi perlindungan, akun sang Super Admin `admin-PDAM` sudah disembunyikan dari tabel `UsersTable`, namun sayangnya itu membuat Sang Admin ini tidak akan pernah bisa mengakses halamannya sendiri untuk mengganti *Password* atau merubah alamat *Email* pribadinya sendiri di Panel Admin jika diretas/handover.
-- **Instruksi Perbaikan:** Harus menghidupkan (_Uncomment/Add_) fitur `->profile()` milik Filament 3 pada *provider / service config filament admin panel* utama, sehingga Super-Admin bisa mengatur dan mengganti sandinya dengan aman di "Bilah Pojok Kanan Atas" akun tanpa bersentuhan dengan Resource Warga!
+Setelah ini, `MeterAir::find($id)->delete()` hanya mengisi `deleted_at`,
+tidak menghapus row dari tabel. Query normal otomatis mengabaikan record
+yang sudah soft-deleted.
+
+---
+
+## 🐛 Task 2: Guard Delete di `MeterAirResource` Filament
+
+Tambahkan tiga lapis proteksi di resource Filament.
+
+### Lapis 1 — Override `canDelete` di Resource
+
+```php
+// MeterAirResource.php
+public static function canDelete(Model $record): bool
+{
+    // Block delete jika meter masih punya riwayat pencatatan
+    if ($record->pencatatanMeters()->exists()) {
+        return false;
+    }
+    // Block delete jika meter masih berstatus Aktif
+    if ($record->status === 'Aktif') {
+        return false;
+    }
+    return true;
+}
+```
+
+### Lapis 2 — Tampilkan pesan yang jelas di UI
+
+Jika `canDelete` return false, Filament otomatis menyembunyikan tombol
+delete. Tambahkan notifikasi informatif jika admin mencoba aksi ini via
+URL langsung:
+
+```php
+// Di halaman EditMeterAir
+protected function getHeaderActions(): array
+{
+    return [
+        DeleteAction::make()
+            ->disabled(fn ($record) => $record->pencatatanMeters()->exists()
+                || $record->status === 'Aktif')
+            ->tooltip('Meter yang memiliki riwayat pencatatan atau masih
+                       aktif tidak dapat dihapus.'),
+    ];
+}
+```
+
+### Lapis 3 — Ubah FK constraint `pencatatan_meter` (opsional tapi direkomendasikan)
+
+Pertimbangkan migration alter untuk mengubah FK dari `cascadeOnDelete`
+ke `restrictOnDelete` sebagai perlindungan terakhir di level database:
+
+```php
+// php artisan make:migration update_pencatatan_meter_foreign_key
+Schema::table('pencatatan_meter', function (Blueprint $table) {
+    $table->dropForeign(['meter_air_id']);
+    $table->foreign('meter_air_id')
+          ->references('id')
+          ->on('meter_air')
+          ->restrictOnDelete();
+});
+```
+
+> Dengan ini, bahkan jika lapisan aplikasi berhasil dibypass, database
+> akan menolak operasi delete secara keras.
+
+---
+
+## 🔍 Task 3: Filter Pelanggan Tanpa Meter Air
+
+Tambahkan filter di `PelangganResource` tabel list untuk memudahkan
+admin mengidentifikasi pelanggan yang belum memiliki meter terpasang.
+
+### 3a. Tambah filter di `PelangganResource::table()`
+
+```php
+->filters([
+    Filter::make('belum_punya_meter')
+        ->label('Belum Punya Meter')
+        ->query(fn (Builder $query) =>
+            $query->whereDoesntHave('meterAirs')
+        ),
+
+    Filter::make('tidak_ada_meter_aktif')
+        ->label('Tidak Ada Meter Aktif')
+        ->query(fn (Builder $query) =>
+            $query->whereDoesntHave('meterAirs', fn ($q) =>
+                $q->where('status', 'Aktif')
+            )
+        ),
+])
+```
+
+### 3b. Tambah badge indikator di kolom tabel
+
+```php
+// Di kolom tabel PelangganResource
+TextColumn::make('status_meter')
+    ->label('Status Meter')
+    ->getStateUsing(function ($record) {
+        if ($record->meterAirs()->doesntExist()) {
+            return 'Belum Ada Meter';
+        }
+        if (!$record->meterAktif) {
+            return 'Tidak Ada Meter Aktif';
+        }
+        return 'Aktif';
+    })
+    ->badge()
+    ->color(fn (string $state): string => match ($state) {
+        'Aktif'                 => 'success',
+        'Tidak Ada Meter Aktif' => 'warning',
+        'Belum Ada Meter'       => 'danger',
+    }),
+```
+
+---
+
+## 🖥️ Task 4: Tampilkan Info Meter Aktif di Tabel & Detail Pelanggan
+
+### 4a. Tambah kolom nomor meter di tabel list `PelangganResource`
+
+```php
+TextColumn::make('meterAktif.nomor_meter')
+    ->label('Nomor Meter')
+    ->default('—')
+    ->placeholder('Belum terpasang'),
+```
+
+### 4b. Tambah tombol navigasi "Lihat Meter" di action tabel
+
+```php
+->actions([
+    ActionGroup::make([
+        EditAction::make(),
+
+        Action::make('lihat_meter')
+            ->label('Lihat Meter')
+            ->icon('heroicon-o-signal')
+            ->url(fn ($record) =>
+                MeterAirResource::getUrl('index',
+                    ['tableFilters[pelanggan][value]' => $record->id])
+            )
+            ->openUrlInNewTab(false),
+    ]),
+])
+```
+
+### 4c. Tambah section meter air di halaman ViewPelanggan
+
+Jika resource `Pelanggan` memiliki halaman `View`, tambahkan section
+yang menampilkan daftar semua meter milik pelanggan tersebut beserta
+statusnya:
+
+```php
+// Di ViewPelanggan atau InfoList PelangganResource
+Section::make('Riwayat Meter Air')
+    ->schema([
+        RepeatableEntry::make('meterAirs')
+            ->schema([
+                TextEntry::make('nomor_meter')->label('Nomor Meter'),
+                TextEntry::make('merek')->label('Merek'),
+                TextEntry::make('tanggal_pasang')->label('Dipasang')->date(),
+                TextEntry::make('angka_awal')->label('Angka Awal'),
+                TextEntry::make('status')
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn ($state) => match($state) {
+                        'Aktif'   => 'success',
+                        'Rusak'   => 'warning',
+                        'Diganti' => 'gray',
+                    }),
+            ])
+            ->columns(5),
+    ]),
+```
+
+---
+
+## 💡 Catatan Desain: Urutan Buat Pelanggan vs Meter Air
+
+Pelanggan **boleh dibuat tanpa meter air** — ini sesuai praktik PDAM
+di lapangan:
+
+1. Warga mengajukan permohonan sambungan
+2. Admin mendaftarkan pelanggan (bisa dilakukan di kantor)
+3. Petugas lapangan survei dan pasang meter fisik
+4. Admin input data meter air setelah pemasangan selesai
+
+Ada jeda waktu antara langkah 2 dan 3. Memaksa input meter saat
+create pelanggan akan menjadi bottleneck yang tidak perlu.
+
+Yang penting: admin bisa dengan mudah mengidentifikasi pelanggan
+yang belum punya meter (via filter dan badge di Task 3) agar tidak
+ada yang terlewat.
+
+---
+
+## ⚠️ Urutan Eksekusi
+
+1. Jalankan migration soft deletes `meter_air`
+2. Jalankan migration alter FK `pencatatan_meter` (jika Task 2 Lapis 3
+   diputuskan untuk diimplementasi)
+3. Update model `MeterAir`
+4. Update `MeterAirResource` dengan guard delete
+5. Update `PelangganResource` dengan filter, kolom, dan action baru

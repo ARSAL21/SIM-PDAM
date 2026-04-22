@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class MeterAirResource extends Resource
 {
@@ -27,6 +28,25 @@ class MeterAirResource extends Resource
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'nomor_meter';
+
+    /**
+     * Guard Delete — Lapis 1 (Resource-level)
+     * Block delete jika meter punya riwayat pencatatan ATAU masih berstatus Aktif.
+     */
+    public static function canDelete(Model $record): bool
+    {
+        // Meter yang punya riwayat pencatatan tidak boleh dihapus
+        if ($record->pencatatanMeters()->exists()) {
+            return false;
+        }
+
+        // Meter yang masih aktif tidak boleh dihapus
+        if ($record->status === 'Aktif') {
+            return false;
+        }
+
+        return true;
+    }
 
     public static function form(Schema $schema): Schema
     {
