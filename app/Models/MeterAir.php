@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'pelanggan_id', 'nomor_meter', 'merek',
     'tanggal_pasang', 'angka_awal', 'status',
+    'melanjutkan_dari_id', 'tanggal_oper_kontrak',
 ])]
 class MeterAir extends Model
 {
@@ -24,6 +25,7 @@ class MeterAir extends Model
     {
         return [
             'tanggal_pasang' => 'date',
+            'tanggal_oper_kontrak' => 'date',
         ];
     }
 
@@ -41,5 +43,17 @@ class MeterAir extends Model
     public function pencatatanTerakhir(): HasOne
     {
         return $this->hasOne(PencatatanMeter::class)->latestOfMany();
+    }
+
+    // Meter ini adalah kelanjutan dari meter mana? (Skenario C)
+    public function melanjutkanDari(): BelongsTo
+    {
+        return $this->belongsTo(MeterAir::class, 'melanjutkan_dari_id');
+    }
+
+    // Meter mana yang meneruskan meter ini? (Skenario C)
+    public function dilanjutkanOleh(): HasOne
+    {
+        return $this->hasOne(MeterAir::class, 'melanjutkan_dari_id');
     }
 }
