@@ -21,24 +21,81 @@ class MeterAirForm
                     ->relationship(
                         name: 'pelanggan',
                         titleAttribute: 'no_pelanggan',
-                        modifyQueryUsing: fn (Builder $query, string $operation) => 
-                            $query->with('user')
-                                ->where('status_aktif', true)
-                                ->when($operation === 'create', function ($q) {
-                                    //Hanya tampilkan pelanggan yang TIDAK punya meteran 'Aktif'
-                                    $q->whereDoesntHave('meterAirs', function ($subQuery) {
+                        modifyQueryUsing: function (Builder $query, string $operation) {
+                            $query->with('user');
+
+                            if ($operation === 'create') {
+                                $query
+                                    ->where('status_aktif', true)
+                                    ->whereDoesntHave('meterAirs', function ($subQuery) {
                                         $subQuery->where('status', 'Aktif');
                                     });
-                                })
+                            }
+
+                            return $query;
+                        }
                     )
                     ->getOptionLabelFromRecordUsing(fn (Model $record) => "{$record->user->name} ({$record->no_pelanggan})")
                     ->searchable(['no_pelanggan'])
                     ->preload()
+                    ->disabledOn('edit')
                     ->required(),
+
+                Select::make('melanjutkan_dari_id')
+                    ->label('Melanjutkan dari Meter (Oper Kontrak)')
+                    ->helperText('Isi hanya jika pelanggan baru menempati lokasi pelanggan lama dan menggunakan meteran fisik yang sama.')
+                    ->nullable()
+                    ->searchable()
+                    ->getSearchResultsUsing(fn (string $search) => \App\Models\MeterAir::where('status', 'Nonaktif')
+                        ->where(fn ($q) => $q
+                            ->where('nomor_meter', 'like', "%{$search}%")
+                            ->orWhereHas('pelanggan.user', fn ($q) => $q->where('name', 'like', "%{$search}%")
+                            )
+                        )
+                        ->with('pelanggan.user')
+                        ->limit(10)
+                        ->get()
+                        ->mapWithKeys(fn ($meter) => [
+                            $meter->id => "{$meter->nomor_meter} — " . $meter->pelanggan->user->name
+                        ])
+                    )
+                    ->getOptionLabelUsing(function ($value) {
+                        $meter = \App\Models\MeterAir::with('pelanggan.user')->find($value);
+                        return $meter ? "{$meter->nomor_meter} — " . $meter->pelanggan->user->name : null;
+                    })
+                    ->live()
+                    ->afterStateUpdated(function ($state, $set) {
+                        if (!$state) {
+                            $set('tanggal_oper_kontrak', null);
+                            return;
+                        }
+                        $meterLama = \App\Models\MeterAir::with('pencatatanTerakhir')->find($state);
+                        if (!$meterLama) return;
+                        
+                        // Auto-populate dari data meter lama
+                        $angkaAwal = $meterLama->pencatatanTerakhir?->angka_akhir ?? $meterLama->angka_awal;
+                        $set('angka_awal', $angkaAwal);
+                        $set('nomor_meter', $meterLama->nomor_meter);
+                        $set('merek', $meterLama->merek);
+                        $set('tanggal_pasang', $meterLama->tanggal_pasang);
+                        $set('tanggal_oper_kontrak', now()->toDateString());
+                    }),
 
                 TextInput::make('nomor_meter')
                     ->label('Nomor Meter')
-                    ->unique(ignoreRecord: true)
+                    ->nullable()
+                    ->rule(function (Get $get, ?Model $record) {
+                        return function (string $attribute, mixed $value, \Closure $fail) use ($record) {
+                            if (blank($value)) return;
+                            $exists = \App\Models\MeterAir::where('nomor_meter', $value)
+                                ->where('status', 'Aktif')
+                                ->when($record, fn($q) => $q->whereNot('id', $record->id))
+                                ->exists();
+                            if ($exists) {
+                                $fail("Nomor meter {$value} sudah digunakan oleh meter lain yang masih berstatus Aktif.");
+                            }
+                        };
+                    })
                     ->required()
                     ->placeholder('Contoh: MT-2026-XYZ'),
 
@@ -50,6 +107,13 @@ class MeterAirForm
                     ->label('Tanggal Pasang')
                     ->default(now())
                     ->required(),
+
+                DatePicker::make('tanggal_oper_kontrak')
+                    ->label('Tanggal Oper Kontrak')
+                    ->helperText('Tanggal pelanggan baru mulai melanjutkan meter dari pelanggan sebelumnya.')
+                    ->visible(fn (Get $get) => filled($get('melanjutkan_dari_id')))
+                    ->required(fn (Get $get) => filled($get('melanjutkan_dari_id')))
+                    ->nullable(),
 
                 TextInput::make('angka_awal')
                     ->label('Angka Awal')
@@ -67,6 +131,7 @@ class MeterAirForm
                         'Aktif' => 'Aktif',
                         'Rusak' => 'Rusak',
                         'Diganti' => 'Diganti',
+                        'Nonaktif' => 'Nonaktif',
                     ])
                     ->default('Aktif')
                     ->required()
