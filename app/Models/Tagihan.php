@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['pencatatan_meter_id', 'pelanggan_id', 'no_tagihan', 'jumlah_tagihan', 'status_bayar'])]
 class Tagihan extends Model
 {
+    protected $table = 'tagihan';
     use HasFactory;
 
     public function pencatatanMeter(): BelongsTo

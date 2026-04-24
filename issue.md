@@ -1,203 +1,114 @@
-# Issue: Refactor Skema `meter_air` — Dukungan Oper Kontrak,
-# Status Nonaktif, dan Keterlacakan Riwayat Antar Pelanggan
+# Issue: Implementasi Resource `PencatatanMeter` — Form, Validasi, Koreksi, dan Skenario Lengkap
 
-## 📌 Latar Belakang & Analisis Bisnis
+## 📌 Latar Belakang
 
-Sistem saat ini memiliki constraint `UNIQUE` global pada kolom `nomor_meter`
-di tabel `meter_air`. Constraint ini memblok skenario bisnis yang valid dan
-umum terjadi di lapangan PDAM: **oper kontrak** — kondisi di mana pelanggan
-baru menempati lokasi yang sama dengan pelanggan lama dan menggunakan meteran
-fisik yang sama.
+`PencatatanMeter` adalah inti dari seluruh siklus billing SIAM-PDAM.
+Setiap record yang lahir dari resource ini adalah sumber kebenaran tunggal
+untuk kalkulasi tagihan. Karena itu ada dua hal yang harus dijamin:
 
-### Tiga Skenario Bisnis Definitif
+1. **Tidak boleh ada angka yang salah masuk tanpa bisa dikoreksi** — admin
+   harus punya jalan keluar jika terjadi kesalahan input di lapangan.
+2. **Koreksi tidak boleh merusak data periode lain** — desain snapshot
+   `angka_awal` yang sudah ada menjamin ini secara arsitektur.
 
-**Skenario A — Pelanggan Baru, Lokasi Baru:**
-Pelanggan mendaftar di lokasi yang belum pernah ada pelanggan sebelumnya.
-Selalu buat record `meter_air` baru dengan nomor meter baru. Tidak ada
-hubungan ke meter manapun yang sudah ada di database. `angka_awal` diisi
-sesuai kondisi fisik meter saat dipasang.
-
-**Skenario B — Pelanggan Nonaktif, Tidak Ada Pengganti:**
-Pelanggan berhenti berlangganan dan tidak ada pelanggan pengganti di lokasi
-tersebut. Pelanggan dinonaktifkan → meter otomatis berubah ke status `Nonaktif`
-via observer. Seluruh data tersimpan sebagai historis selamanya. Tidak ada
-aksi lanjutan yang diperlukan.
-
-**Skenario C — Oper Kontrak (Lokasi Sama, Pelanggan Baru):**
-Pelanggan baru menempati rumah/lokasi yang sama dengan pelanggan lama.
-Pelanggan lama dinonaktifkan → meter lama otomatis menjadi `Nonaktif` →
-admin membuat record `meter_air` **baru** untuk pelanggan baru dengan nomor
-fisik yang sama. `angka_awal` diisi dari `angka_akhir` terakhir meter lama.
-Kedua record terhubung secara eksplisit di database via kolom
-`melanjutkan_dari_id`.
-
-### Prinsip yang Tidak Boleh Dilanggar
-
-- **Data tidak boleh dihapus.** Pelanggan lama dan meterannya tetap ada di
-  database sebagai catatan historis.
-- **Meter bekas tidak boleh diberikan sembarangan.** Hanya boleh dilanjutkan
-  jika pelanggan baru benar-benar menempati lokasi yang sama (oper kontrak).
-  Pelanggan di lokasi baru wajib mendapat nomor meter baru.
-- **Keterlacakan wajib ada.** Harus bisa ditelusuri: meter ini melanjutkan
-  dari meter siapa, dan meter ini diteruskan ke siapa.
+Fitur ini hanya bisa diakses oleh **admin (petugas PDAM) lewat Filament**.
+User/pelanggan tidak memiliki akses ke resource ini dalam bentuk apapun.
 
 ---
 
-## 🗄️ Task 1: Migration — Refactor Tabel `meter_air`
+## 🔄 Flow Lengkap
 
-Buat file migration baru untuk tiga perubahan sekaligus.
+### Flow Create (Input Bulanan)
+
+```
+Admin buka form PencatatanMeter baru
+  │
+  ├── Pilih meter aktif
+  │     └── Sistem auto-populate angka_awal:
+  │           ├── Ada pencatatan sebelumnya? → ambil angka_akhir terakhir
+  │           └── Tidak ada?                → ambil meter_air.angka_awal
+  │
+  ├── Pilih periode (bulan + tahun)
+  │     └── Validasi: kombinasi (meter_air_id + bulan + tahun) belum ada?
+  │           └── Sudah ada → tolak, tampilkan pesan duplikat
+  │
+  ├── Input angka_akhir (satu-satunya input manual petugas)
+  │     └── Live preview: pemakaian_m3 = angka_akhir - angka_awal
+  │
+  └── Submit
+        ├── Server hitung ulang pemakaian_m3 (safeguard, tidak percaya client)
+        ├── dicatat_oleh diisi otomatis: auth()->id()
+        └── Record tersimpan → siap untuk di-generate tagihannya (langkah terpisah)
+```
+
+### Flow Edit (Koreksi)
+
+```
+Admin klik Edit pada record pencatatan
+  │
+  ├── Guard: apakah tagihan sudah berstatus Lunas?
+  │     └── Ya  → blok edit, tampilkan pesan penjelasan
+  │     └── Tidak → lanjut ke form edit
+  │
+  ├── Jika tagihan sudah ada (belum Lunas) → tampilkan WARNING eksplisit
+  │     "Perubahan angka ini tidak otomatis mengupdate tagihan.
+  │      Batalkan tagihan lama dan generate ulang setelah koreksi."
+  │
+  ├── Admin ubah angka_akhir
+  │     └── Live preview pemakaian_m3 terupdate
+  │
+  ├── Admin wajib isi catatan_koreksi (required saat edit)
+  │
+  └── Submit
+        ├── Server hitung ulang pemakaian_m3
+        └── Record terupdate — tagihan lama TIDAK otomatis berubah
+```
+
+---
+
+## 🗄️ Task 1: Migration — Tambah Kolom `catatan_koreksi`
+
+Kolom ini nullable karena pada saat **create** tidak ada koreksi.
+Hanya diisi saat **edit** dan wajib diisi.
 
 ```php
-// php artisan make:migration refactor_meter_air_for_oper_kontrak
+// php artisan make:migration add_catatan_koreksi_to_pencatatan_meter_table
 
-Schema::table('meter_air', function (Blueprint $table) {
-
-    // 1. Hapus unique constraint global pada nomor_meter.
-    //    Aturan unique dipindah ke level aplikasi dengan kondisi:
-    //    hanya boleh ada satu nomor meter yang berstatus Aktif pada satu waktu.
-    $table->dropUnique(['nomor_meter']);
-
-    // 2. Tambah status Nonaktif pada enum.
-    //    Nonaktif = meter idle karena pelanggan berhenti, fisik masih ada
-    //    di lapangan, belum tentu rusak atau diganti.
-    $table->enum('status', ['Aktif', 'Rusak', 'Diganti', 'Nonaktif'])
-          ->default('Aktif')
-          ->change();
-
-    // 3. Tambah kolom jejak oper kontrak (self-referencing FK).
-    //    Diisi hanya pada Skenario C. Null = bukan kelanjutan dari meter manapun.
-    $table->foreignId('melanjutkan_dari_id')
+Schema::table('pencatatan_meter', function (Blueprint $table) {
+    $table->text('catatan_koreksi')
           ->nullable()
-          ->after('angka_awal')
-          ->constrained('meter_air')
-          ->nullOnDelete();
+          ->after('pemakaian_m3')
+          ->comment('Wajib diisi saat edit. Kosong jika ini input pertama kali.');
 });
 ```
 
-### Makna Setiap Status Setelah Refactor
-
-| Status | Makna |
-|---|---|
-| `Aktif` | Terpasang, digunakan, bisa menerima pencatatan baru |
-| `Nonaktif` | Idle karena pelanggan berhenti. Fisik ada, tapi tidak dipakai |
-| `Rusak` | Kerusakan fisik pada alat. Perlu diganti unit baru |
-| `Diganti` | Sudah diganti dengan unit meter baru secara fisik |
-
----
-
-## 🔗 Task 2: Update Model `MeterAir`
-
-Tambahkan dua relasi self-referencing untuk mendukung keterlacakan
-oper kontrak, dan update cast enum.
+Setelah migration, tambahkan ke `$fillable` di model `PencatatanMeter`:
 
 ```php
-// app/Models/MeterAir.php
-
-protected function casts(): array
-{
-    return [
-        'tanggal_pasang' => 'date',
-        // Tambahkan jika menggunakan PHP Enum untuk status
-        // 'status' => StatusMeterEnum::class,
-    ];
-}
-
-// Meter ini adalah kelanjutan dari meter mana? (Skenario C)
-public function melanjutkanDari(): BelongsTo
-{
-    return $this->belongsTo(MeterAir::class, 'melanjutkan_dari_id');
-}
-
-// Meter mana yang meneruskan meter ini? (Skenario C)
-public function dilanjutkanOleh(): HasOne
-{
-    return $this->hasOne(MeterAir::class, 'melanjutkan_dari_id');
-}
+#[Fillable([
+    'meter_air_id', 'periode_bulan', 'periode_tahun',
+    'angka_awal', 'angka_akhir', 'pemakaian_m3',
+    'catatan_koreksi', // tambahkan ini
+    'dicatat_oleh',
+])]
 ```
 
 ---
 
-## ⚙️ Task 3: Observer `Pelanggan` — Otomasi Nonaktifkan Meter
+## 🖥️ Task 2: Form Create `PencatatanMeterResource`
 
-Ketika `status_aktif` pelanggan diubah menjadi `false`, semua meter miliknya
-yang berstatus `Aktif` harus otomatis berubah ke `Nonaktif`. Jangan biarkan
-ini dilakukan manual — terlalu mudah terlewat.
-
-### 3a. Buat Observer
+### Field `meter_air_id`
 
 ```php
-// php artisan make:observer PelangganObserver --model=Pelanggan
-
-// app/Observers/PelangganObserver.php
-
-public function updated(Pelanggan $pelanggan): void
-{
-    if ($pelanggan->wasChanged('status_aktif') && !$pelanggan->status_aktif) {
-        $pelanggan->meterAirs()
-                  ->where('status', 'Aktif')
-                  ->update(['status' => 'Nonaktif']);
-    }
-}
-```
-
-### 3b. Daftarkan Observer
-
-```php
-// app/Providers/AppServiceProvider.php
-
-public function boot(): void
-{
-    Pelanggan::observe(PelangganObserver::class);
-}
-```
-
----
-
-## 🖥️ Task 4: Update `MeterAirResource` — Form & Tampilan
-
-### 4a. Validasi `nomor_meter` — Pindah dari DB ke Aplikasi
-
-Ganti logika unique yang sebelumnya ditangani DB dengan validasi kondisional:
-nomor meter boleh muncul lebih dari satu kali di database, tapi tidak boleh
-ada dua meter dengan nomor yang sama dan status `Aktif` secara bersamaan.
-
-```php
-TextInput::make('nomor_meter')
-    ->nullable()
-    ->rule(function (Get $get, ?Model $record) {
-        return function (string $attribute, mixed $value, Closure $fail)
-            use ($record) {
-                if (blank($value)) return;
-
-                $exists = MeterAir::where('nomor_meter', $value)
-                    ->where('status', 'Aktif')
-                    ->when($record, fn($q) => $q->whereNot('id', $record->id))
-                    ->exists();
-
-                if ($exists) {
-                    $fail("Nomor meter {$value} sudah digunakan oleh
-                           meter lain yang masih berstatus Aktif.");
-                }
-        };
-    }),
-```
-
-### 4b. Tambah Field `melanjutkan_dari_id` (Oper Kontrak)
-
-Field ini bersifat opsional. Hanya muncul jika admin memilih untuk
-mendaftarkan meter sebagai kelanjutan dari meter nonaktif sebelumnya.
-Ketika dipilih, `angka_awal` otomatis ter-populate dari `angka_akhir`
-pencatatan terakhir meter yang dipilih.
-
-```php
-Select::make('melanjutkan_dari_id')
-    ->label('Melanjutkan dari Meter (Oper Kontrak)')
-    ->helperText('Isi hanya jika pelanggan baru menempati lokasi
-                  pelanggan lama dan menggunakan meteran fisik yang sama.')
-    ->nullable()
+Select::make('meter_air_id')
+    ->label('Meter Air')
+    ->required()
     ->searchable()
     ->getSearchResultsUsing(fn (string $search) =>
-        MeterAir::where('status', 'Nonaktif')
+        MeterAir::where('status', 'Aktif')
+            ->whereHas('pelanggan', fn ($q) =>
+                $q->where('status_aktif', true)
+            )
             ->where(fn ($q) => $q
                 ->where('nomor_meter', 'like', "%{$search}%")
                 ->orWhereHas('pelanggan.user', fn ($q) =>
@@ -205,115 +116,422 @@ Select::make('melanjutkan_dari_id')
                 )
             )
             ->with('pelanggan.user')
-            ->limit(10)
+            ->limit(20)
             ->get()
             ->mapWithKeys(fn ($meter) => [
-                $meter->id => "{$meter->nomor_meter} — " .
+                $meter->id => "[{$meter->nomor_meter}] " .
                               $meter->pelanggan->user->name
             ])
     )
     ->live()
     ->afterStateUpdated(function ($state, Set $set) {
-        if (!$state) return;
+        if (!$state) {
+            $set('angka_awal', null);
+            $set('pemakaian_m3', null);
+            return;
+        }
 
-        $meterLama = MeterAir::with('pencatatanTerakhir')->find($state);
-        if (!$meterLama) return;
+        $meter = MeterAir::with('pencatatanTerakhir')->find($state);
+        if (!$meter) return;
 
-        // Auto-populate angka_awal dari angka_akhir pencatatan terakhir
-        $angkaAwal = $meterLama->pencatatanTerakhir?->angka_akhir
-                     ?? $meterLama->angka_awal;
+        $angkaAwal = $meter->pencatatanTerakhir?->angka_akhir
+                     ?? $meter->angka_awal;
 
         $set('angka_awal', $angkaAwal);
-        $set('nomor_meter', $meterLama->nomor_meter);
     }),
 ```
 
-### 4c. Tampilan Keterlacakan di Halaman Detail / View
+> **Filter wajib:** Hanya meter `status = 'Aktif'` milik pelanggan
+> `status_aktif = true` yang muncul. Meter rusak, nonaktif, dan diganti
+> tidak boleh bisa dipilih.
 
-Jika record `meter_air` memiliki `melanjutkan_dari_id` atau `dilanjutkanOleh`,
-tampilkan informasi rantai oper kontrak secara eksplisit.
+---
+
+### Field Periode
 
 ```php
-// Di InfoList atau halaman ViewMeterAir
+Grid::make(2)->schema([
+    Select::make('periode_bulan')
+        ->label('Bulan')
+        ->required()
+        ->options([
+            1 => 'Januari',  2 => 'Februari', 3 => 'Maret',
+            4 => 'April',    5 => 'Mei',       6 => 'Juni',
+            7 => 'Juli',     8 => 'Agustus',   9 => 'September',
+            10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ])
+        ->default(now()->month),
 
-// Tampil jika meter ini adalah kelanjutan dari meter lain
-Section::make('Riwayat Oper Kontrak')
-    ->visible(fn ($record) =>
-        $record->melanjutkan_dari_id || $record->dilanjutkanOleh
-    )
-    ->schema([
-        TextEntry::make('melanjutkanDari.nomor_meter')
-            ->label('Melanjutkan dari Meter')
-            ->visible(fn ($record) => $record->melanjutkan_dari_id)
-            ->formatStateUsing(fn ($state, $record) =>
-                "{$state} — " .
-                $record->melanjutkanDari->pelanggan->user->name .
-                " (berhenti: " .
-                $record->melanjutkanDari->pencatatanTerakhir
-                    ?->created_at->format('M Y') .
-                ", angka terakhir: " .
-                number_format($record->angka_awal) . " m³)"
-            ),
+    TextInput::make('periode_tahun')
+        ->label('Tahun')
+        ->required()
+        ->numeric()
+        ->minValue(2000)
+        ->maxValue(now()->year + 1)
+        ->default(now()->year),
+]),
+```
 
-        TextEntry::make('dilanjutkanOleh.pelanggan.user.name')
-            ->label('Diteruskan ke Pelanggan')
-            ->visible(fn ($record) => $record->dilanjutkanOleh)
-            ->formatStateUsing(fn ($state, $record) =>
-                "{$state} — mulai: " .
-                $record->dilanjutkanOleh
-                    ->pencatatanTerakhir
-                    ?->created_at->format('M Y')
-            ),
+---
+
+### Field `angka_awal`
+
+```php
+TextInput::make('angka_awal')
+    ->label('Angka Awal (m³)')
+    ->required()
+    ->numeric()
+    ->readOnly()
+    ->dehydrated(true)  // WAJIB — field readOnly tidak ter-submit tanpa ini
+    ->helperText(
+        'Terisi otomatis dari angka akhir bulan lalu. ' .
+        'Jika ini pencatatan pertama, diambil dari angka awal meter.'
+    ),
+```
+
+---
+
+### Field `angka_akhir`
+
+```php
+TextInput::make('angka_akhir')
+    ->label('Angka Akhir (m³)')
+    ->required()
+    ->numeric()
+    ->minValue(0)
+    ->live(onBlur: true)
+    ->afterStateUpdated(function ($state, Get $get, Set $set) {
+        $angkaAwal  = (int) $get('angka_awal');
+        $angkaAkhir = (int) $state;
+
+        $set('pemakaian_m3', $angkaAkhir >= $angkaAwal
+            ? $angkaAkhir - $angkaAwal
+            : null
+        );
+    })
+    ->rules([
+        fn (Get $get): Closure => function (
+            string $attribute,
+            mixed $value,
+            Closure $fail
+        ) use ($get) {
+            if ((int) $value < (int) $get('angka_awal')) {
+                $fail(
+                    'Angka akhir tidak boleh lebih kecil dari angka awal (' .
+                    number_format((int) $get('angka_awal')) . ' m³).'
+                );
+            }
+        },
     ]),
 ```
 
 ---
 
-## ✅ Skenario Uji
+### Field `pemakaian_m3`
 
-### Skenario A — Pelanggan Baru, Lokasi Baru
-
-| # | Kondisi | Langkah | Hasil yang Diharapkan |
-|---|---|---|---|
-| ✅ | Normal | Buat meter baru, `melanjutkan_dari_id` kosong, nomor baru | Record tersimpan, tidak ada relasi ke meter lain |
-| ❌ | Nomor duplikat aktif | Input `nomor_meter` yang sudah dipakai meter `Aktif` lain | Validasi gagal: "Nomor meter sudah digunakan meter yang masih Aktif" |
-| ✅ | Nomor sama tapi lama sudah Nonaktif | Input nomor yang pernah dipakai meter `Nonaktif` | Validasi lolos — ini bukan oper kontrak, hanya kebetulan nomor sama |
-
-### Skenario B — Pelanggan Nonaktif, Tidak Ada Pengganti
-
-| # | Kondisi | Langkah | Hasil yang Diharapkan |
-|---|---|---|---|
-| ✅ | Normal | Toggle `status_aktif` pelanggan → false | Observer berjalan, semua meter `Aktif` miliknya → `Nonaktif` |
-| ✅ | Pelanggan punya 2 meter | Nonaktifkan pelanggan dengan dua meter | Kedua meter berubah ke `Nonaktif` sekaligus |
-| ❌ | Observer tidak terpasang | Nonaktifkan pelanggan tanpa observer | Meter tetap `Aktif` — bug, observer wajib terdaftar di `AppServiceProvider` |
-
-### Skenario C — Oper Kontrak
-
-| # | Kondisi | Langkah | Hasil yang Diharapkan |
-|---|---|---|---|
-| ✅ | Normal | Pilih meter `Nonaktif` di field `melanjutkan_dari_id` | `angka_awal` dan `nomor_meter` otomatis ter-isi dari meter lama |
-| ✅ | Keterlacakan | Buka detail meter baru setelah tersimpan | Section "Riwayat Oper Kontrak" muncul, menampilkan info meter lama |
-| ✅ | Keterlacakan balik | Buka detail meter lama | Tampil info: "Diteruskan ke Pelanggan B — mulai Feb 2025" |
-| ❌ | Pilih meter yang masih Aktif | Coba pilih meter `Aktif` di dropdown oper kontrak | Dropdown hanya menampilkan meter `Nonaktif` — tidak bisa dipilih |
-| ❌ | Edit `angka_awal` setelah oper kontrak dipilih | — | Field `angka_awal` menjadi `readOnly()` setelah `melanjutkan_dari_id` diisi |
+```php
+TextInput::make('pemakaian_m3')
+    ->label('Pemakaian (m³)')
+    ->numeric()
+    ->readOnly()
+    ->dehydrated(true)  // WAJIB
+    ->helperText('Dihitung otomatis: angka akhir dikurangi angka awal.'),
+```
 
 ---
 
-## ⚠️ Urutan Eksekusi
+### Safeguard Server di `mutateFormDataBeforeCreate`
 
-1. Jalankan migration refactor `meter_air`
-2. Update model `MeterAir` (relasi baru)
-3. Buat dan daftarkan `PelangganObserver`
-4. Update `MeterAirResource` (validasi, field oper kontrak, tampilan detail)
-5. Jalankan `php artisan migrate` — tidak perlu `migrate:fresh`,
-   migration ini bersifat alter (additive + modify), data lama aman.
+```php
+protected function mutateFormDataBeforeCreate(array $data): array
+{
+    // Hitung ulang di server — tidak percaya kalkulasi dari client
+    $data['pemakaian_m3'] = (int) $data['angka_akhir']
+                          - (int) $data['angka_awal'];
+
+    // Isi petugas yang mencatat secara otomatis
+    $data['dicatat_oleh'] = auth()->id();
+
+    // Pastikan catatan_koreksi kosong saat create
+    $data['catatan_koreksi'] = null;
+
+    return $data;
+}
+```
 
 ---
 
-## 💡 Catatan Penting
+## 🖥️ Task 3: Form Edit `PencatatanMeterResource` (Koreksi)
 
-Kolom `melanjutkan_dari_id` menggunakan `nullOnDelete` — bukan
-`cascadeOnDelete` dan bukan `restrictOnDelete`. Artinya jika record
-meter lama suatu saat terhapus (meskipun seharusnya tidak karena
-soft delete), kolom ini di record baru akan menjadi `null` secara
-otomatis — tidak menyebabkan error dan tidak menghapus data meter baru.
+Form edit **berbeda** dari form create dalam dua hal: field `meter_air_id`
+dan `angka_awal` menjadi `disabled()` (tidak boleh diubah), dan field
+`catatan_koreksi` menjadi wajib.
+
+### Perbedaan di Form Edit
+
+```php
+// meter_air_id tidak boleh diubah saat edit
+Select::make('meter_air_id')
+    ->disabled()
+    ->dehydrated(false), // tidak perlu dikirim ulang
+
+// angka_awal tidak boleh diubah saat edit
+TextInput::make('angka_awal')
+    ->disabled()
+    ->dehydrated(false),
+
+// catatan_koreksi WAJIB saat edit
+Textarea::make('catatan_koreksi')
+    ->label('Alasan Koreksi')
+    ->required()
+    ->rows(3)
+    ->helperText('Jelaskan alasan perubahan angka meter ini. Wajib diisi.')
+    ->visibleOn('edit'),
+```
+
+### Warning Jika Tagihan Sudah Ada
+
+```php
+Placeholder::make('peringatan_koreksi')
+    ->label('')
+    ->content(new HtmlString(
+        '<div style="padding: 0.75rem; background: #FAEEDA;
+                     border-radius: 8px; color: #633806;">
+            <strong>Perhatian:</strong> Pencatatan ini sudah memiliki tagihan
+            aktif. Perubahan angka di sini <strong>tidak otomatis mengupdate
+            jumlah tagihan</strong>. Batalkan tagihan lama dan generate ulang
+            setelah koreksi ini disimpan.
+        </div>'
+    ))
+    ->visibleOn('edit')
+    ->visible(fn ($record) =>
+        $record?->tagihan?->status_bayar !== null &&
+        $record?->tagihan?->status_bayar !== 'Lunas'
+    ),
+```
+
+### Safeguard Server di `mutateFormDataBeforeSave`
+
+```php
+protected function mutateFormDataBeforeSave(array $data): array
+{
+    // Ambil angka_awal dari database — bukan dari form (sudah disabled)
+    $angkaAwal = $this->record->angka_awal;
+
+    // Hitung ulang pemakaian berdasarkan angka_akhir yang baru
+    $data['pemakaian_m3'] = (int) $data['angka_akhir'] - (int) $angkaAwal;
+
+    return $data;
+}
+```
+
+---
+
+## 🔒 Task 4: Guard Edit & Delete
+
+```php
+// PencatatanMeterResource.php
+
+public static function canEdit(Model $record): bool
+{
+    // Blok edit jika tagihan sudah Lunas — pembayaran final tidak bisa dikoreksi
+    if ($record->tagihan?->status_bayar === 'Lunas') {
+        return false;
+    }
+    return true;
+}
+
+public static function canDelete(Model $record): bool
+{
+    // Blok delete jika sudah ada tagihan dalam kondisi apapun
+    return ! $record->tagihan()->exists();
+}
+```
+
+Tambahkan tooltip yang informatif pada action:
+
+```php
+->actions([
+    EditAction::make()
+        ->tooltip(fn ($record) =>
+            $record->tagihan?->status_bayar === 'Lunas'
+                ? 'Tidak dapat diedit — tagihan sudah lunas.'
+                : 'Edit pencatatan'
+        ),
+
+    DeleteAction::make()
+        ->tooltip(fn ($record) =>
+            $record->tagihan()->exists()
+                ? 'Tidak dapat dihapus — sudah memiliki tagihan.'
+                : 'Hapus pencatatan'
+        ),
+])
+```
+
+---
+
+## 🖥️ Task 5: Tabel List `PencatatanMeterResource`
+
+```php
+->columns([
+    TextColumn::make('meterAir.nomor_meter')
+        ->label('Nomor Meter')
+        ->searchable(),
+
+    TextColumn::make('meterAir.pelanggan.user.name')
+        ->label('Nama Pelanggan')
+        ->searchable(),
+
+    TextColumn::make('periode')
+        ->label('Periode')
+        ->getStateUsing(fn ($record) =>
+            \Carbon\Carbon::create($record->periode_tahun, $record->periode_bulan)
+                ->translatedFormat('F Y')
+        )
+        ->sortable(query: fn ($query, $direction) =>
+            $query->orderBy('periode_tahun', $direction)
+                  ->orderBy('periode_bulan', $direction)
+        ),
+
+    TextColumn::make('angka_awal')
+        ->label('Angka Awal')
+        ->numeric()
+        ->alignRight(),
+
+    TextColumn::make('angka_akhir')
+        ->label('Angka Akhir')
+        ->numeric()
+        ->alignRight(),
+
+    TextColumn::make('pemakaian_m3')
+        ->label('Pemakaian (m³)')
+        ->numeric()
+        ->alignRight()
+        ->weight(FontWeight::Medium),
+
+    TextColumn::make('tagihan.status_bayar')
+        ->label('Status Tagihan')
+        ->badge()
+        ->default('Belum Digenerate')
+        ->color(fn (string $state): string => match ($state) {
+            'Belum Bayar'         => 'warning',
+            'Menunggu Verifikasi' => 'info',
+            'Lunas'               => 'success',
+            default               => 'gray',
+        }),
+
+    IconColumn::make('catatan_koreksi')
+        ->label('Dikoreksi')
+        ->boolean()
+        ->trueIcon('heroicon-o-pencil-square')
+        ->falseIcon('')
+        ->trueColor('warning')
+        ->tooltip(fn ($record) => $record->catatan_koreksi ?? '')
+        ->getStateUsing(fn ($record) => filled($record->catatan_koreksi)),
+
+    TextColumn::make('petugas.name')
+        ->label('Dicatat Oleh')
+        ->toggleable(isToggledHiddenByDefault: true),
+])
+->filters([
+    SelectFilter::make('periode_tahun')
+        ->label('Tahun')
+        ->options(
+            PencatatanMeter::selectRaw('DISTINCT periode_tahun')
+                ->orderByDesc('periode_tahun')
+                ->pluck('periode_tahun', 'periode_tahun')
+        ),
+
+    SelectFilter::make('periode_bulan')
+        ->label('Bulan')
+        ->options([
+            1 => 'Januari',  2 => 'Februari', 3 => 'Maret',
+            4 => 'April',    5 => 'Mei',       6 => 'Juni',
+            7 => 'Juli',     8 => 'Agustus',   9 => 'September',
+            10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ]),
+
+    Filter::make('belum_digenerate')
+        ->label('Belum Ada Tagihan')
+        ->query(fn ($query) => $query->doesntHave('tagihan')),
+
+    Filter::make('sudah_dikoreksi')
+        ->label('Pernah Dikoreksi')
+        ->query(fn ($query) => $query->whereNotNull('catatan_koreksi')),
+])
+```
+
+---
+
+## ✅ Skenario Uji Lengkap
+
+### Create — Happy Path
+
+| # | Kondisi | Langkah | Hasil yang Diharapkan |
+|---|---|---|---|
+| ✅ 1 | Pencatatan pertama meter baru | Pilih meter baru, `angka_awal` = 0 (dari `meter_air.angka_awal`), input `angka_akhir` = 80 | `pemakaian_m3` = 80, record tersimpan, `catatan_koreksi` = null |
+| ✅ 2 | Pencatatan bulan berikutnya | Pilih meter yang sudah punya pencatatan, `angka_awal` = 80 (auto), input `angka_akhir` = 155 | `pemakaian_m3` = 75, record tersimpan |
+| ✅ 3 | Live preview pemakaian | Input `angka_akhir` sambil mengetik | Field `pemakaian_m3` berubah real-time |
+| ✅ 4 | `dicatat_oleh` otomatis | Submit form | Kolom terisi ID admin yang login, tidak ada field manual |
+
+### Create — Edge Case & Error
+
+| # | Kondisi | Langkah | Hasil yang Diharapkan |
+|---|---|---|---|
+| ❌ 5 | Angka akhir lebih kecil | `angka_awal` = 500, input `angka_akhir` = 300 | Validasi gagal: "Angka akhir tidak boleh lebih kecil dari angka awal (500 m³)" |
+| ❌ 6 | Duplikat periode | Input pencatatan kedua untuk meter dan periode yang sama | Error ditangkap dari unique constraint, tampilkan pesan ramah — bukan raw SQL error |
+| ❌ 7 | Pilih meter tidak aktif | — | Meter rusak, nonaktif, diganti tidak muncul di dropdown |
+| ❌ 8 | Pilih meter milik pelanggan nonaktif | — | Tidak muncul di dropdown karena filter `status_aktif = true` |
+
+### Edit (Koreksi) — Happy Path
+
+| # | Kondisi | Langkah | Hasil yang Diharapkan |
+|---|---|---|---|
+| ✅ 9 | Koreksi sebelum tagihan digenerate | Edit `angka_akhir`, isi `catatan_koreksi` | Record terupdate, `pemakaian_m3` dihitung ulang server |
+| ✅ 10 | Koreksi saat tagihan belum Lunas | Edit `angka_akhir`, isi `catatan_koreksi` | Record terupdate, warning tagihan perlu diregenerate muncul |
+| ✅ 11 | Indikator koreksi di tabel | Setelah koreksi tersimpan | Kolom "Dikoreksi" menampilkan ikon pensil, hover menampilkan isi catatan |
+
+### Edit (Koreksi) — Edge Case & Error
+
+| # | Kondisi | Langkah | Hasil yang Diharapkan |
+|---|---|---|---|
+| ❌ 12 | Edit tanpa isi catatan koreksi | Kosongkan field `catatan_koreksi`, submit | Validasi gagal: "Alasan koreksi wajib diisi" |
+| ❌ 13 | Edit pencatatan yang tagihannya sudah Lunas | Klik edit | Tombol edit tidak aktif, tooltip: "Tidak dapat diedit — tagihan sudah lunas" |
+| ❌ 14 | Koreksi tidak mempengaruhi bulan lain | Edit `angka_akhir` Februari | Record Maret tetap menggunakan `angka_awal` lama (snapshot) — tidak ikut berubah |
+
+### Delete
+
+| # | Kondisi | Langkah | Hasil yang Diharapkan |
+|---|---|---|---|
+| ✅ 15 | Hapus pencatatan tanpa tagihan | Klik delete | Record terhapus |
+| ❌ 16 | Hapus pencatatan yang sudah punya tagihan | Klik delete | Diblok: tooltip "Tidak dapat dihapus — sudah memiliki tagihan" |
+
+---
+
+## ⚠️ Catatan Teknis Penting
+
+**`dehydrated(true)` wajib** pada `angka_awal` dan `pemakaian_m3`. Field
+`readOnly()` secara default tidak ter-submit ke server oleh Filament.
+Tanpa `dehydrated(true)`, kedua kolom tersimpan sebagai `null` atau `0`
+di database tanpa ada error apapun — bug yang sulit di-debug.
+
+**Double kalkulasi by design.** `pemakaian_m3` dihitung dua kali:
+sekali di client via `live()` untuk preview UX, sekali di server via
+`mutateFormDataBeforeCreate` dan `mutateFormDataBeforeSave` untuk
+keamanan. Ini bukan redundansi — kalkulasi client bisa dimanipulasi
+dari browser.
+
+**Relasi `petugas()` non-standard.** FK `dicatat_oleh` bukan `user_id`.
+Selalu akses via `$pencatatan->petugas`, bukan `$pencatatan->user`
+(akan return `null`).
+
+**Koreksi tidak cascade ke bulan berikutnya.** Ini by design — setiap
+record `pencatatan_meter` menyimpan `angka_awal` sebagai snapshot statis.
+Mengedit bulan Februari tidak akan mengubah `angka_awal` bulan Maret.
+Konsekuensinya adalah gap kecil antar periode yang wajar secara bisnis
+dan harus dijelaskan ke admin lewat UI.
+
+**Urutan eksekusi:**
+1. Jalankan migration tambah kolom `catatan_koreksi`
+2. Update `$fillable` di model `PencatatanMeter`
+3. Implementasi form create, form edit, guard, dan tabel list

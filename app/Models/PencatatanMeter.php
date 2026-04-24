@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'meter_air_id', 'periode_bulan', 'periode_tahun',
-    'angka_awal', 'angka_akhir', 'pemakaian_m3', 'dicatat_oleh',
+    'angka_awal', 'angka_akhir', 'pemakaian_m3',
+    'catatan_koreksi', 'dicatat_oleh',
 ])]
 class PencatatanMeter extends Model
 {
