@@ -43,4 +43,12 @@ class EditMeterAir extends EditRecord
                 }),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Paksa pelanggan_id selalu dari database — abaikan apapun yang datang dari request
+        $data['pelanggan_id'] = $this->getRecord()->pelanggan_id;
+
+        return $data;
+    }
 }

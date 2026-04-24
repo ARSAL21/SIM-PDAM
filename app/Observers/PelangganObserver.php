@@ -14,7 +14,10 @@ class PelangganObserver
         if ($pelanggan->wasChanged('status_aktif') && !$pelanggan->status_aktif) {
             $pelanggan->meterAirs()
                 ->where('status', 'Aktif')
-                ->update(['status' => 'Nonaktif']);
+                ->update([
+                    'status' => 'Nonaktif',
+                    'tanggal_nonaktif' => now()->toDateString(),
+            ]);
         }
     }
 

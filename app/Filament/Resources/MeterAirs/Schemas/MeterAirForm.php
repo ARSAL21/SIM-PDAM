@@ -47,6 +47,10 @@ class MeterAirForm
                     ->nullable()
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search) => \App\Models\MeterAir::where('status', 'Nonaktif')
+                         ->whereHas('pelanggan', fn ($q) =>
+                            $q->where('status_aktif', false) // pelanggan juga harus nonaktif
+                        )
+                        ->whereDoesntHave('dilanjutkanOleh')
                         ->where(fn ($q) => $q
                             ->where('nomor_meter', 'like', "%{$search}%")
                             ->orWhereHas('pelanggan.user', fn ($q) => $q->where('name', 'like', "%{$search}%")
@@ -83,7 +87,6 @@ class MeterAirForm
 
                 TextInput::make('nomor_meter')
                     ->label('Nomor Meter')
-                    ->nullable()
                     ->rule(function (Get $get, ?Model $record) {
                         return function (string $attribute, mixed $value, \Closure $fail) use ($record) {
                             if (blank($value)) return;
@@ -136,19 +139,31 @@ class MeterAirForm
                     ->default('Aktif')
                     ->required()
                     ->rules([
-                        fn (Get $get, ?Model $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
-                            if ($value === 'Aktif') {
-                                $pelangganId = $get('pelanggan_id');
-                                if (!$pelangganId) return;
+                        fn (Get $get, ?Model $record): \Closure => function (string $attribute, $value, \Closure $fail
+                        ) use ($get, $record) {
+                            if ($value !== 'Aktif') return; // hanya validasi jika status diubah ke Aktif
 
-                                $hasActive = \App\Models\MeterAir::where('pelanggan_id', $pelangganId)
-                                    ->where('status', 'Aktif')
-                                    ->when($record, fn($q) => $q->where('id', '!=', $record->id))
-                                    ->exists();
+                            $pelangganId = $record?->pelanggan_id ?? $get('pelanggan_id');
+                            if (!$pelangganId) return;
 
-                                if ($hasActive) {
-                                    $fail('Gagal menyimpan. Pelanggan ini sudah memiliki alat meter berstatus Aktif lainnya.');
-                                }
+                            // Cek 1 — apakah pelanggannya sendiri masih aktif?
+                            $pelanggan = \App\Models\Pelanggan::with('user')->find($pelangganId);
+                            if ($pelanggan && !$pelanggan->status_aktif) {
+                                $fail(
+                                    'Meter tidak dapat diaktifkan karena pelanggan ' .
+                                    $pelanggan->user->name . ' sedang nonaktif.'
+                                );
+                                return; // stop di sini, tidak perlu cek berikutnya
+                            }
+
+                            // Cek 2 — apakah sudah ada meter aktif lain untuk pelanggan ini?
+                            $hasActive = \App\Models\MeterAir::where('pelanggan_id', $pelangganId)
+                                ->where('status', 'Aktif')
+                                ->when($record, fn($q) => $q->where('id', '!=', $record->id))
+                                ->exists();
+
+                            if ($hasActive) {
+                                $fail('Gagal menyimpan. Pelanggan ini sudah memiliki alat meter berstatus Aktif lainnya.');
                             }
                         },
                     ]),
