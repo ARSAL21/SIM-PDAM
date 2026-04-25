@@ -6,6 +6,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Schemas\Components\Section as ComponentsSection;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
 
 class MeterAirInfolist
 {
@@ -34,21 +35,45 @@ class MeterAirInfolist
                     }),
                     
                 ComponentsSection::make('Riwayat Oper Kontrak')
-                    ->visible(fn ($record) => $record->melanjutkan_dari_id || $record->dilanjutkanOleh )
+                    ->visible(fn ($record) => 
+                        $record->melanjutkan_dari_id || 
+                        filled($record->oper_dari_nomor_meter) || 
+                        $record->dilanjutkanOleh
+                    )
                     ->schema([
-                        TextEntry::make('melanjutkanDari.nomor_meter')
+                        TextEntry::make('oper_dari_meter')
                             ->label('Melanjutkan dari Meter')
-                            ->visible(fn ($record) => $record->melanjutkan_dari_id)
-                            ->formatStateUsing(fn ($state, $record) => "{$state} — milik " . $record->melanjutkanDari->pelanggan->user->name
-                            ),
-                        TextEntry::make('melanjutkanDari.updated_at')
+                            ->visible(fn ($record) => 
+                                $record->melanjutkan_dari_id || filled($record->oper_dari_nomor_meter)
+                            )
+                            ->state(function (Model $record) {
+                                $nomor = $record->melanjutkanDari?->nomor_meter
+                                         ?? $record->oper_dari_nomor_meter;
+
+                                $nama = $record->melanjutkanDari?->pelanggan?->user?->name
+                                        ?? $record->oper_dari_nama_pelanggan;
+
+                                if (!$nomor) return null;
+                                return "{$nomor} — milik {$nama}";
+                            }),
+
+                        TextEntry::make('tanggal_nonaktif_history')
                             ->label('Pelanggan Sebelumnya Berhenti Pada')
-                            ->visible(fn ($record) => $record->melanjutkan_dari_id)
-                            ->date('d M Y'),
+                            ->state(function (Model $record) {
+                                if ($record->melanjutkan_dari_id || filled($record->oper_dari_nomor_meter)) {
+                                    return $record->melanjutkanDari?->tanggal_nonaktif
+                                           ?? $record->oper_dari_tanggal_nonaktif;
+                                }
+                                return $record->tanggal_nonaktif;
+                            })
+                            ->date('d M Y')
+                            ->placeholder('—'),
+
                         TextEntry::make('tanggal_oper_kontrak')
                             ->label('Tanggal Oper Kontrak (Pelanggan Baru Mulai)')
                             ->visible(fn ($record) => $record->tanggal_oper_kontrak)
                             ->date('d M Y'),
+
                         TextEntry::make('dilanjutkanOleh.pelanggan.user.name')
                             ->label('Diteruskan ke Pelanggan')
                             ->visible(fn ($record) => $record->dilanjutkanOleh)
