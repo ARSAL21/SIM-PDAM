@@ -28,7 +28,7 @@ class OperKontrak extends Page implements HasSchemas
 
     protected static string|\UnitEnum|null $navigationGroup = 'Data Meter Air';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $title = 'Proses Oper Kontrak';
 
