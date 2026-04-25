@@ -115,6 +115,7 @@ class PencatatanMeterForm
                         );
                     })
                     ->rules([
+                        // Validasi 1: angka tidak boleh kurang dari angka_awal
                         fn (Get $get): Closure => function (
                             string $attribute,
                             mixed $value,
@@ -124,6 +125,38 @@ class PencatatanMeterForm
                                 $fail(
                                     'Angka akhir tidak boleh lebih kecil dari angka awal (' .
                                     number_format((int) $get('angka_awal')) . ' m³).'
+                                );
+                            }
+                        },
+
+                        // Validasi 2: Strict Chronological Insertion
+                        fn (Get $get, ?\Illuminate\Database\Eloquent\Model $record): Closure => function (
+                            string $attribute,
+                            mixed $value,
+                            Closure $fail
+                        ) use ($get, $record) {
+                            $meterId = $get('meter_air_id') ?? $record?->meter_air_id;
+                            $bulan   = (int) $get('periode_bulan');
+                            $tahun   = (int) $get('periode_tahun');
+
+                            if (!$meterId || !$bulan || !$tahun) return;
+
+                            $adaPeriodeLebihBaru = \App\Models\PencatatanMeter::where('meter_air_id', $meterId)
+                                ->when($record?->id, fn ($q) => $q->where('id', '!=', $record->id))
+                                ->where(fn ($q) => $q
+                                    ->where('periode_tahun', '>', $tahun)
+                                    ->orWhere(fn ($q) => $q
+                                        ->where('periode_tahun', $tahun)
+                                        ->where('periode_bulan', '>', $bulan)
+                                    )
+                                )
+                                ->exists();
+
+                            if ($adaPeriodeLebihBaru) {
+                                $fail(
+                                    'Tidak dapat menyimpan pencatatan untuk periode ini. ' .
+                                    'Sudah ada pencatatan di periode yang lebih baru untuk meter ini. ' .
+                                    'Hapus pencatatan setelahnya terlebih dahulu jika ingin menyisipkan data.'
                                 );
                             }
                         },

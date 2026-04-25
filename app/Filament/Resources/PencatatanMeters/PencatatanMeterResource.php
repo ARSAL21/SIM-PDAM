@@ -5,7 +5,9 @@ namespace App\Filament\Resources\PencatatanMeters;
 use App\Filament\Resources\PencatatanMeters\Pages\CreatePencatatanMeter;
 use App\Filament\Resources\PencatatanMeters\Pages\EditPencatatanMeter;
 use App\Filament\Resources\PencatatanMeters\Pages\ListPencatatanMeters;
+use App\Filament\Resources\PencatatanMeters\Pages\ViewPencatatanMeter;
 use App\Filament\Resources\PencatatanMeters\Schemas\PencatatanMeterForm;
+use App\Filament\Resources\PencatatanMeters\Schemas\PencatatanMeterInfolist;
 use App\Filament\Resources\PencatatanMeters\Tables\PencatatanMetersTable;
 use App\Models\PencatatanMeter;
 use BackedEnum;
@@ -40,6 +42,11 @@ class PencatatanMeterResource extends Resource
         return PencatatanMetersTable::configure($table);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return PencatatanMeterInfolist::configure($schema);
+    }
+
     /**
      * Guard Edit — Lapis 1 (Resource-level)
      * Blok edit jika tagihan sudah Lunas.
@@ -66,6 +73,7 @@ class PencatatanMeterResource extends Resource
         return [
             'index' => ListPencatatanMeters::route('/'),
             'create' => CreatePencatatanMeter::route('/create'),
+            'view' => ViewPencatatanMeter::route('/{record}'),
             'edit' => EditPencatatanMeter::route('/{record}/edit'),
         ];
     }

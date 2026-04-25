@@ -4,8 +4,14 @@ namespace App\Filament\Resources\PencatatanMeters\Tables;
 
 use App\Models\PencatatanMeter;
 use Carbon\Carbon;
+use Filament\Actions\Action as ActionsAction;
 use Filament\Actions\DeleteAction as ActionsDeleteAction;
 use Filament\Actions\EditAction as ActionsEditAction;
+use Filament\Actions\ViewAction as ActionsViewAction;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\ViewAction;
+use Filament\Tables\Actions\Action;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -105,12 +111,30 @@ class PencatatanMetersTable
                     ->query(fn ($query) => $query->whereNotNull('catatan_koreksi')),
             ])
             ->recordActions([
+                ActionsViewAction::make(),
+                
                 ActionsEditAction::make()
                     ->tooltip(fn ($record) =>
                         $record->tagihan?->status_bayar === 'Lunas'
                             ? 'Tidak dapat diedit — tagihan sudah lunas.'
                             : 'Edit pencatatan'
                     ),
+
+                ActionsAction::make('generate_tagihan')
+                    ->label('Generate Tagihan')
+                    ->icon('heroicon-o-document-plus')
+                    ->color('success')
+                    ->hidden(fn ($record) => $record->tagihan()->exists())
+                    ->requiresConfirmation()
+                    ->action(function ($record) {
+                        $tagihan = \App\Services\GenerateTagihanService::execute($record);
+
+                        \Filament\Notifications\Notification::make()
+                            ->success()
+                            ->title('Tagihan berhasil digenerate.')
+                            ->body("No. Tagihan: {$tagihan->no_tagihan}")
+                            ->send();
+                    }),
 
                 ActionsDeleteAction::make()
                     ->tooltip(fn ($record) =>

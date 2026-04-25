@@ -22,19 +22,45 @@ class EditPencatatanMeter extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        // Ambil angka_awal dari database — bukan dari form (sudah disabled)
-        $angkaAwal = $this->getRecord()->angka_awal;
-        // Hitung ulang pemakaian berdasarkan angka_akhir yang baru
-        $data['pemakaian_m3'] = (int) $data['angka_akhir'] - (int) $angkaAwal;
+        $record = $this->getRecord();
+        $angkaAwal = $record->angka_awal;
 
-        // Safeguard server — catatan_koreksi wajib ada saat edit
-        if (blank($data['catatan_koreksi'] ?? null)) {
-            $this->halt(); // stop proses save
+        // Strict Chronological — server side (exclude ID sendiri)
+        $adaPeriodeLebihBaru = \App\Models\PencatatanMeter::where('meter_air_id', $record->meter_air_id)
+            ->where('id', '!=', $record->id)
+            ->where(fn ($q) => $q
+                ->where('periode_tahun', '>', (int) ($data['periode_tahun'] ?? $record->periode_tahun))
+                ->orWhere(fn ($q) => $q
+                    ->where('periode_tahun', (int) ($data['periode_tahun'] ?? $record->periode_tahun))
+                    ->where('periode_bulan', '>', (int) ($data['periode_bulan'] ?? $record->periode_bulan))
+                )
+            )
+            ->exists();
+
+        if ($adaPeriodeLebihBaru) {
             Notification::make()
-                ->title('Alasan koreksi wajib diisi.')
                 ->danger()
+                ->title('Periode Tidak Valid')
+                ->body(
+                    'Sudah ada pencatatan di periode yang lebih baru. ' .
+                    'Tidak dapat menyimpan perubahan ini.'
+                )
                 ->send();
+
+            $this->halt();
         }
+
+        // catatan_koreksi wajib saat edit
+        if (blank($data['catatan_koreksi'] ?? null)) {
+            Notification::make()
+                ->danger()
+                ->title('Alasan koreksi wajib diisi.')
+                ->send();
+
+            $this->halt();
+        }
+
+        $data['pemakaian_m3'] = (int) $data['angka_akhir'] - (int) $angkaAwal;
 
         return $data;
     }
