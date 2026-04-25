@@ -90,10 +90,25 @@ class MeterAirForm
                     ->rule(function (Get $get, ?Model $record) {
                         return function (string $attribute, mixed $value, \Closure $fail) use ($record) {
                             if (blank($value)) return;
+
+                            // Guard baru — blok edit nomor meter jika sudah punya penerus
+                            if ($record && $record->dilanjutkanOleh) {
+                                if ($value !== $record->nomor_meter) {
+                                    $fail(
+                                        'Nomor meter tidak dapat diubah karena meter ini sudah ' .
+                                        'dioper kontrak ke pelanggan lain. Identitas fisik meter ' .
+                                        'harus tetap sama untuk menjaga keterlacakan riwayat.'
+                                    );
+                                    return;
+                                }
+                            }
+
+                            // Validasi existing — nomor aktif tidak boleh duplikat
                             $exists = \App\Models\MeterAir::where('nomor_meter', $value)
                                 ->where('status', 'Aktif')
                                 ->when($record, fn($q) => $q->whereNot('id', $record->id))
                                 ->exists();
+
                             if ($exists) {
                                 $fail("Nomor meter {$value} sudah digunakan oleh meter lain yang masih berstatus Aktif.");
                             }
@@ -131,39 +146,53 @@ class MeterAirForm
                 Select::make('status')
                     ->label('Status')
                     ->options([
-                        'Aktif' => 'Aktif',
-                        'Rusak' => 'Rusak',
-                        'Diganti' => 'Diganti',
+                        'Aktif'    => 'Aktif',
+                        'Rusak'    => 'Rusak',
+                        'Diganti'  => 'Diganti',
                         'Nonaktif' => 'Nonaktif',
                     ])
                     ->default('Aktif')
                     ->required()
                     ->rules([
-                        fn (Get $get, ?Model $record): \Closure => function (string $attribute, $value, \Closure $fail
+                        fn (Get $get, ?Model $record): \Closure => function (
+                            string $attribute,
+                            $value,
+                            \Closure $fail
                         ) use ($get, $record) {
-                            if ($value !== 'Aktif') return; // hanya validasi jika status diubah ke Aktif
+                            // Guard baru — blok reaktivasi meter yang sudah dioper kontrak
+                            if ($value === 'Aktif' && $record?->dilanjutkanOleh) {
+                                $penerus = $record->dilanjutkanOleh->pelanggan->user->name;
+                                $fail(
+                                    'Meter ini tidak dapat diaktifkan kembali karena sudah ' .
+                                    "dioper kontrak ke {$penerus}. Jika pelanggan ini memerlukan " .
+                                    'sambungan baru, buat data meter air baru.'
+                                );
+                                return;
+                            }
+
+                            if ($value !== 'Aktif') return;
 
                             $pelangganId = $record?->pelanggan_id ?? $get('pelanggan_id');
                             if (!$pelangganId) return;
 
-                            // Cek 1 — apakah pelanggannya sendiri masih aktif?
+                            // Guard existing — cek pelanggan nonaktif
                             $pelanggan = \App\Models\Pelanggan::with('user')->find($pelangganId);
                             if ($pelanggan && !$pelanggan->status_aktif) {
                                 $fail(
                                     'Meter tidak dapat diaktifkan karena pelanggan ' .
                                     $pelanggan->user->name . ' sedang nonaktif.'
                                 );
-                                return; // stop di sini, tidak perlu cek berikutnya
+                                return;
                             }
 
-                            // Cek 2 — apakah sudah ada meter aktif lain untuk pelanggan ini?
+                            // Guard existing — cek duplikat meter aktif
                             $hasActive = \App\Models\MeterAir::where('pelanggan_id', $pelangganId)
                                 ->where('status', 'Aktif')
                                 ->when($record, fn($q) => $q->where('id', '!=', $record->id))
                                 ->exists();
 
                             if ($hasActive) {
-                                $fail('Gagal menyimpan. Pelanggan ini sudah memiliki alat meter berstatus Aktif lainnya.');
+                                $fail('Pelanggan ini sudah memiliki alat meter berstatus Aktif lainnya.');
                             }
                         },
                     ]),

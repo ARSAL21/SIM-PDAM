@@ -43,7 +43,8 @@ class PelangganForm
                             ->label('Email')
                             ->email()
                             ->required()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->unique('users', 'email'),
                         TextInput::make('password')
                             ->label('Password')
                             ->password()
