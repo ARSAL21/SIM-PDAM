@@ -96,6 +96,7 @@ class PelangganForm
                 Textarea::make('alamat')
                     ->label('Alamat Lengkap')
                     ->required()
+                    ->minLength(10)
                     ->rows(3)
                     ->maxLength(500),
 
