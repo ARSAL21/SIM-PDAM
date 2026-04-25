@@ -66,6 +66,7 @@ class MeterAirsTable
                         'Aktif' => 'Aktif',
                         'Rusak' => 'Rusak',
                         'Diganti' => 'Diganti',
+                        'Nonaktif' => 'Nonaktif',
                     ]),
             ])
             ->recordActions([

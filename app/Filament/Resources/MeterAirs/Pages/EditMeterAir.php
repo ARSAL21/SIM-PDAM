@@ -43,4 +43,43 @@ class EditMeterAir extends EditRecord
                 }),
         ];
     }
+
+    // EditMeterAir.php
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $record = $this->getRecord();
+
+        // Paksa pelanggan_id tidak bisa berubah
+        $data['pelanggan_id'] = $record->pelanggan_id;
+
+        // Guard server — meter yang sudah dioper tidak boleh diaktifkan
+        if (isset($data['status']) && $data['status'] === 'Aktif' && $record->dilanjutkanOleh) {
+            $this->halt();
+            Notification::make()
+                ->danger()
+                ->title('Aksi Ditolak')
+                ->body(
+                    'Meter ini tidak dapat diaktifkan kembali karena sudah dioper kontrak. ' .
+                    'Buat data meter air baru jika diperlukan sambungan baru.'
+                )
+                ->send();
+        }
+
+        // Guard server — nomor meter tidak boleh diubah jika sudah dioper
+        if ($record->dilanjutkanOleh && isset($data['nomor_meter'])) {
+            if ($data['nomor_meter'] !== $record->nomor_meter) {
+                $data['nomor_meter'] = $record->nomor_meter; // paksa kembali ke nilai asal
+                Notification::make()
+                    ->warning()
+                    ->title('Nomor Meter Tidak Diubah')
+                    ->body(
+                        'Nomor meter tidak dapat diubah karena meter ini sudah dioper kontrak. ' .
+                        'Perubahan diabaikan.'
+                    )
+                    ->send();
+            }
+        }
+
+        return $data;
+    }
 }

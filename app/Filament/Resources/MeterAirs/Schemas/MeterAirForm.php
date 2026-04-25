@@ -41,56 +41,30 @@ class MeterAirForm
                     ->disabledOn('edit')
                     ->required(),
 
-                Select::make('melanjutkan_dari_id')
-                    ->label('Melanjutkan dari Meter (Oper Kontrak)')
-                    ->helperText('Isi hanya jika pelanggan baru menempati lokasi pelanggan lama dan menggunakan meteran fisik yang sama.')
-                    ->nullable()
-                    ->searchable()
-                    ->getSearchResultsUsing(fn (string $search) => \App\Models\MeterAir::where('status', 'Nonaktif')
-                        ->where(fn ($q) => $q
-                            ->where('nomor_meter', 'like', "%{$search}%")
-                            ->orWhereHas('pelanggan.user', fn ($q) => $q->where('name', 'like', "%{$search}%")
-                            )
-                        )
-                        ->with('pelanggan.user')
-                        ->limit(10)
-                        ->get()
-                        ->mapWithKeys(fn ($meter) => [
-                            $meter->id => "{$meter->nomor_meter} — " . $meter->pelanggan->user->name
-                        ])
-                    )
-                    ->getOptionLabelUsing(function ($value) {
-                        $meter = \App\Models\MeterAir::with('pelanggan.user')->find($value);
-                        return $meter ? "{$meter->nomor_meter} — " . $meter->pelanggan->user->name : null;
-                    })
-                    ->live()
-                    ->afterStateUpdated(function ($state, $set) {
-                        if (!$state) {
-                            $set('tanggal_oper_kontrak', null);
-                            return;
-                        }
-                        $meterLama = \App\Models\MeterAir::with('pencatatanTerakhir')->find($state);
-                        if (!$meterLama) return;
-                        
-                        // Auto-populate dari data meter lama
-                        $angkaAwal = $meterLama->pencatatanTerakhir?->angka_akhir ?? $meterLama->angka_awal;
-                        $set('angka_awal', $angkaAwal);
-                        $set('nomor_meter', $meterLama->nomor_meter);
-                        $set('merek', $meterLama->merek);
-                        $set('tanggal_pasang', $meterLama->tanggal_pasang);
-                        $set('tanggal_oper_kontrak', now()->toDateString());
-                    }),
-
                 TextInput::make('nomor_meter')
                     ->label('Nomor Meter')
-                    ->nullable()
                     ->rule(function (Get $get, ?Model $record) {
                         return function (string $attribute, mixed $value, \Closure $fail) use ($record) {
                             if (blank($value)) return;
+
+                            // Guard baru — blok edit nomor meter jika sudah punya penerus
+                            if ($record && $record->dilanjutkanOleh) {
+                                if ($value !== $record->nomor_meter) {
+                                    $fail(
+                                        'Nomor meter tidak dapat diubah karena meter ini sudah ' .
+                                        'dioper kontrak ke pelanggan lain. Identitas fisik meter ' .
+                                        'harus tetap sama untuk menjaga keterlacakan riwayat.'
+                                    );
+                                    return;
+                                }
+                            }
+
+                            // Validasi existing — nomor aktif tidak boleh duplikat
                             $exists = \App\Models\MeterAir::where('nomor_meter', $value)
                                 ->where('status', 'Aktif')
                                 ->when($record, fn($q) => $q->whereNot('id', $record->id))
                                 ->exists();
+
                             if ($exists) {
                                 $fail("Nomor meter {$value} sudah digunakan oleh meter lain yang masih berstatus Aktif.");
                             }
@@ -108,13 +82,6 @@ class MeterAirForm
                     ->default(now())
                     ->required(),
 
-                DatePicker::make('tanggal_oper_kontrak')
-                    ->label('Tanggal Oper Kontrak')
-                    ->helperText('Tanggal pelanggan baru mulai melanjutkan meter dari pelanggan sebelumnya.')
-                    ->visible(fn (Get $get) => filled($get('melanjutkan_dari_id')))
-                    ->required(fn (Get $get) => filled($get('melanjutkan_dari_id')))
-                    ->nullable(),
-
                 TextInput::make('angka_awal')
                     ->label('Angka Awal')
                     ->numeric()
@@ -128,27 +95,53 @@ class MeterAirForm
                 Select::make('status')
                     ->label('Status')
                     ->options([
-                        'Aktif' => 'Aktif',
-                        'Rusak' => 'Rusak',
-                        'Diganti' => 'Diganti',
+                        'Aktif'    => 'Aktif',
+                        'Rusak'    => 'Rusak',
+                        'Diganti'  => 'Diganti',
                         'Nonaktif' => 'Nonaktif',
                     ])
                     ->default('Aktif')
                     ->required()
                     ->rules([
-                        fn (Get $get, ?Model $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
-                            if ($value === 'Aktif') {
-                                $pelangganId = $get('pelanggan_id');
-                                if (!$pelangganId) return;
+                        fn (Get $get, ?Model $record): \Closure => function (
+                            string $attribute,
+                            $value,
+                            \Closure $fail
+                        ) use ($get, $record) {
+                            // Guard baru — blok reaktivasi meter yang sudah dioper kontrak
+                            if ($value === 'Aktif' && $record?->dilanjutkanOleh) {
+                                $penerus = $record->dilanjutkanOleh->pelanggan->user->name;
+                                $fail(
+                                    'Meter ini tidak dapat diaktifkan kembali karena sudah ' .
+                                    "dioper kontrak ke {$penerus}. Jika pelanggan ini memerlukan " .
+                                    'sambungan baru, buat data meter air baru.'
+                                );
+                                return;
+                            }
 
-                                $hasActive = \App\Models\MeterAir::where('pelanggan_id', $pelangganId)
-                                    ->where('status', 'Aktif')
-                                    ->when($record, fn($q) => $q->where('id', '!=', $record->id))
-                                    ->exists();
+                            if ($value !== 'Aktif') return;
 
-                                if ($hasActive) {
-                                    $fail('Gagal menyimpan. Pelanggan ini sudah memiliki alat meter berstatus Aktif lainnya.');
-                                }
+                            $pelangganId = $record?->pelanggan_id ?? $get('pelanggan_id');
+                            if (!$pelangganId) return;
+
+                            // Guard existing — cek pelanggan nonaktif
+                            $pelanggan = \App\Models\Pelanggan::with('user')->find($pelangganId);
+                            if ($pelanggan && !$pelanggan->status_aktif) {
+                                $fail(
+                                    'Meter tidak dapat diaktifkan karena pelanggan ' .
+                                    $pelanggan->user->name . ' sedang nonaktif.'
+                                );
+                                return;
+                            }
+
+                            // Guard existing — cek duplikat meter aktif
+                            $hasActive = \App\Models\MeterAir::where('pelanggan_id', $pelangganId)
+                                ->where('status', 'Aktif')
+                                ->when($record, fn($q) => $q->where('id', '!=', $record->id))
+                                ->exists();
+
+                            if ($hasActive) {
+                                $fail('Pelanggan ini sudah memiliki alat meter berstatus Aktif lainnya.');
                             }
                         },
                     ]),

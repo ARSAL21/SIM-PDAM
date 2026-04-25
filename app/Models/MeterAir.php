@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'pelanggan_id', 'nomor_meter', 'merek',
     'tanggal_pasang', 'angka_awal', 'status',
-    'melanjutkan_dari_id', 'tanggal_oper_kontrak',
+    'melanjutkan_dari_id', 'tanggal_oper_kontrak','tanggal_nonaktif', 'oper_dari_nomor_meter','oper_dari_nama_pelanggan','oper_angka_serah_terima', 'oper_dari_tanggal_nonaktif', 'oper_dilakukan_oleh',
 ])]
 class MeterAir extends Model
 {
@@ -26,6 +26,8 @@ class MeterAir extends Model
         return [
             'tanggal_pasang' => 'date',
             'tanggal_oper_kontrak' => 'date',
+            'tanggal_nonaktif' => 'date',
+            'oper_dari_tanggal_nonaktif' => 'date',
         ];
     }
 
@@ -55,5 +57,10 @@ class MeterAir extends Model
     public function dilanjutkanOleh(): HasOne
     {
         return $this->hasOne(MeterAir::class, 'melanjutkan_dari_id');
+    }
+
+    public function operDilakukanOleh(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'oper_dilakukan_oleh');
     }
 }
