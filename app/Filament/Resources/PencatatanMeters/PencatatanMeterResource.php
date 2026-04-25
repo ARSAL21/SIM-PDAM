@@ -51,11 +51,21 @@ class PencatatanMeterResource extends Resource
      * Guard Edit — Lapis 1 (Resource-level)
      * Blok edit jika tagihan sudah Lunas.
      */
+    /**
+     * Guard Edit — Lapis 1 (Resource-level)
+     * Blok edit jika tagihan sedang diproses (Menunggu Verifikasi) atau sudah Lunas.
+     */
     public static function canEdit(Model $record): bool
     {
-        if ($record->tagihan?->status_bayar === 'Lunas') {
-            return false;
+        // Jika tagihan ada, cek statusnya
+        if ($record->tagihan) {
+            $status = $record->tagihan->status_bayar;
+            
+            if (in_array($status, ['Menunggu Verifikasi', 'Lunas'])) {
+                return false; // Sembunyikan tombol Edit
+            }
         }
+        
         return true;
     }
 

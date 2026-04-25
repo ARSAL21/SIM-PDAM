@@ -8,10 +8,6 @@ use Filament\Actions\Action as ActionsAction;
 use Filament\Actions\DeleteAction as ActionsDeleteAction;
 use Filament\Actions\EditAction as ActionsEditAction;
 use Filament\Actions\ViewAction as ActionsViewAction;
-use Filament\Tables\Actions\DeleteAction;
-use Filament\Tables\Actions\EditAction;
-use Filament\Tables\Actions\ViewAction;
-use Filament\Tables\Actions\Action;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -106,6 +102,12 @@ class PencatatanMetersTable
                     ->label('Belum Ada Tagihan')
                     ->query(fn ($query) => $query->doesntHave('tagihan')),
 
+                Filter::make('belum_bayar')
+                    ->label('Belum Bayar')
+                    ->query(fn ($query) => $query->whereHas('tagihan', fn ($q) => 
+                        $q->where('status_bayar', 'Belum Bayar')
+                    )),
+
                 Filter::make('sudah_dikoreksi')
                     ->label('Pernah Dikoreksi')
                     ->query(fn ($query) => $query->whereNotNull('catatan_koreksi')),
@@ -115,8 +117,8 @@ class PencatatanMetersTable
                 
                 ActionsEditAction::make()
                     ->tooltip(fn ($record) =>
-                        $record->tagihan?->status_bayar === 'Lunas'
-                            ? 'Tidak dapat diedit — tagihan sudah lunas.'
+                        in_array($record->tagihan?->status_bayar, ['Menunggu Verifikasi', 'Lunas'])
+                            ? 'Tidak dapat diedit — tagihan sedang diproses atau lunas.'
                             : 'Edit pencatatan'
                     ),
 

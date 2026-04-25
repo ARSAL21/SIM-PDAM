@@ -64,4 +64,32 @@ class EditPencatatanMeter extends EditRecord
 
         return $data;
     }
+
+    protected function afterSave(): void
+    {
+        $record = $this->getRecord();
+        $tagihan = $record->tagihan;
+
+        // Jika ada tagihan dan statusnya masih Belum Bayar, update nominalnya
+        if ($tagihan && $tagihan->status_bayar === 'Belum Bayar') {
+            $jumlahBaru = \App\Services\GenerateTagihanService::calculateAmount($record);
+            
+            // Tambahkan penanda -REV pada nomor tagihan JIKA belum ada
+            $noTagihanBaru = $tagihan->no_tagihan;
+            if (!str_contains($noTagihanBaru, '-REV')) {
+                $noTagihanBaru .= '-REV';
+            }
+
+            $tagihan->update([
+                'jumlah_tagihan' => $jumlahBaru,
+                'no_tagihan'     => $noTagihanBaru, // Jangan lupa update nomor tagihannya
+            ]);
+
+            Notification::make()
+                ->success()
+                ->title('Tagihan Diperbarui')
+                ->body("Nilai tagihan otomatis disesuaikan menjadi Rp " . number_format($jumlahBaru, 0, ',', '.') . " dan nomor tagihan menjadi {$noTagihanBaru}.")
+                ->send();
+        }
+    }
 }

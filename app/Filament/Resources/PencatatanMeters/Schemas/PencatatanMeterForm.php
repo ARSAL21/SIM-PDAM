@@ -179,18 +179,18 @@ class PencatatanMeterForm
                 Placeholder::make('peringatan_koreksi')
                     ->label('')
                     ->content(new HtmlString(
-                        '<div style="padding: 0.75rem; background: #FAEEDA;
-                                     border-radius: 8px; color: #633806;">
-                            <strong>Perhatian:</strong> Pencatatan ini sudah memiliki tagihan
-                            aktif. Perubahan angka di sini <strong>tidak otomatis mengupdate
-                            jumlah tagihan</strong>. Batalkan tagihan lama dan generate ulang
-                            setelah koreksi ini disimpan.
+                        '<div style="padding: 0.75rem; background: #E0F2FE;
+                                     border-radius: 8px; color: #075985;
+                                     border: 1px solid #7DD3FC;">
+                            <strong>ℹ️ Info Otomatisasi:</strong> Pencatatan ini memiliki tagihan 
+                            aktif. Setelah koreksi angka meter ini disimpan, sistem akan 
+                            <strong>otomatis menghitung ulang dan memperbarui</strong> jumlah 
+                            tagihan agar sesuai dengan pemakaian terbaru.
                         </div>'
                     ))
                     ->visibleOn('edit')
                     ->visible(fn ($record) =>
-                        $record?->tagihan?->status_bayar !== null &&
-                        $record?->tagihan?->status_bayar !== 'Lunas'
+                        $record?->tagihan?->status_bayar === 'Belum Bayar'
                     ),
             ]);
     }

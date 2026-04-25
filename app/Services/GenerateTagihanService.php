@@ -8,15 +8,20 @@ use Illuminate\Support\Str;
 
 class GenerateTagihanService
 {
+    public static function calculateAmount(PencatatanMeter $pencatatan): float
+    {
+        $pelanggan = $pencatatan->meterAir->pelanggan;
+        $golongan  = $pelanggan->golonganTarif;
+
+        $biayaPemakaian = $pencatatan->pemakaian_m3 * $golongan->tarif_per_kubik;
+        return $biayaPemakaian + $golongan->biaya_admin;
+    }
+
     public static function execute(PencatatanMeter $pencatatan): Tagihan
     {
         // Ambil pelanggan dari meter saat ini — BUKAN dari relasi lama
         $pelanggan    = $pencatatan->meterAir->pelanggan;
-        $golongan     = $pelanggan->golonganTarif;
-
-        // Kalkulasi flat — tanpa denda
-        $biayaPemakaian = $pencatatan->pemakaian_m3 * $golongan->tarif_per_kubik;
-        $jumlahTagihan  = $biayaPemakaian + $golongan->biaya_admin;
+        $jumlahTagihan = self::calculateAmount($pencatatan);
 
         // Generate no_tagihan unik (INV-YYYY-RANDOM)
         $noTagihan = 'INV-' . now()->format('Y') . '-' . strtoupper(Str::random(5));
