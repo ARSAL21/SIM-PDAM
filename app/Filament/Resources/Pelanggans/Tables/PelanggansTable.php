@@ -156,27 +156,37 @@ class PelanggansTable
                     ->color('info')
                     ->openUrlInNewTab(false),
             ])
-            ->toolbarActions([
+            ->toolbarActions([ // <-- Ganti menjadi bulkActions
                 BulkActionGroup::make([
-                    DeleteBulkAction::make()
+                   DeleteBulkAction::make()
+                        ->successNotification(null)
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            // Filter hanya pelanggan yang masih "Bersih" (Belum punya meter & tagihan)
-                            $blocked = $records->filter(fn (Model $record) => 
+                            
+                            // 1. Filter Pelanggan yang "Kotor"
+                            $blocked = $records->filter(fn ($record) => 
                                 $record->meterAirs()->exists() || $record->tagihans()->exists()
                             );
 
+                            $safeRecords = $records->diff($blocked);
+
+                            // 2. Eksekusi Hapus & Notif Sukses untuk yang "Bersih"
+                            if ($safeRecords->isNotEmpty()) {
+                                $safeRecords->each->delete();
+
+                                \Filament\Notifications\Notification::make()
+                                    ->success()
+                                    ->title('Penghapusan Berhasil')
+                                    ->body("{$safeRecords->count()} pelanggan telah dihapus permanen.")
+                                    ->send();
+                            }
+
+                            // 3. Notif Ditolak untuk yang "Kotor"
                             if ($blocked->isNotEmpty()) {
                                 \Filament\Notifications\Notification::make()
                                     ->danger()
                                     ->title('Sebagian Aksi Ditolak!')
-                                    ->body("{$blocked->count()} pelanggan tidak dapat dihapus karena memiliki riwayat operasional. Sistem hanya menghapus pelanggan yang belum berelasi.")
+                                    ->body("{$blocked->count()} pelanggan tidak dapat dihapus karena memiliki riwayat operasional.")
                                     ->send();
-
-                                // Hapus yang aman saja
-                                $safeRecords = $records->diff($blocked);
-                                $safeRecords->each->delete();
-                            } else {
-                                $records->each->delete();
                             }
                         }),
                 ]),

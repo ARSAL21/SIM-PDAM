@@ -204,20 +204,31 @@ class PencatatanMetersTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
+                        ->successNotification(null) // Matikan bawaan Filament
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            
+                            // 1. Identifikasi data yang diblokir dan data yang aman
                             $blocked = $records->filter(fn ($record) => $record->tagihan()->exists());
+                            $safeRecords = $records->diff($blocked);
 
+                            // 2. Eksekusi data yang aman & kirim notif sukses
+                            if ($safeRecords->isNotEmpty()) {
+                                $safeRecords->each->delete(); // Hapus satu per satu agar event model tetap berjalan
+
+                                \Filament\Notifications\Notification::make()
+                                    ->success()
+                                    ->title('Berhasil Dihapus')
+                                    ->body("{$safeRecords->count()} data pencatatan telah dihapus.")
+                                    ->send();
+                            }
+
+                            // 3. Kirim notif peringatan untuk data yang ditolak
                             if ($blocked->isNotEmpty()) {
                                 \Filament\Notifications\Notification::make()
                                     ->danger()
                                     ->title('Sebagian Aksi Ditolak!')
                                     ->body("{$blocked->count()} pencatatan tidak dapat dihapus karena sudah memiliki tagihan aktif.")
                                     ->send();
-
-                                $safeRecords = $records->diff($blocked);
-                                $safeRecords->each->delete();
-                            } else {
-                                $records->each->delete();
                             }
                         }),
                 ]),
