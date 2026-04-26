@@ -25,7 +25,8 @@ class PencatatanMeterForm
                     ->required()
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search) =>
-                        MeterAir::where('status', 'Aktif')
+                        // 1. Buka akses untuk status Rusak
+                        MeterAir::whereIn('status', ['Aktif', 'Rusak'])
                             ->whereHas('pelanggan', fn ($q) =>
                                 $q->where('status_aktif', true)
                             )
@@ -39,13 +40,15 @@ class PencatatanMeterForm
                             ->limit(20)
                             ->get()
                             ->mapWithKeys(fn ($meter) => [
+                                // 2. Tambahkan peringatan visual di dalam dropdown
                                 $meter->id => "[{$meter->nomor_meter}] " .
-                                              $meter->pelanggan->user->name
+                                              $meter->pelanggan->user->name .
+                                              ($meter->status === 'Rusak' ? ' ⚠️ (RUSAK)' : '')
                             ])
                     )
                     ->getOptionLabelUsing(function ($value) {
                         $meter = MeterAir::with('pelanggan.user')->find($value);
-                        return $meter ? "[{$meter->nomor_meter}] {$meter->pelanggan->user->name}" : null;
+                        return $meter ? "[{$meter->nomor_meter}] {$meter->pelanggan->user->name}" . ($meter->status === 'Rusak' ? ' ⚠️ (RUSAK)' : '') : null;
                     })
                     ->live()
                     ->afterStateUpdated(function ($state, Set $set) {
@@ -66,10 +69,34 @@ class PencatatanMeterForm
                     ->disabledOn('edit')
                     ->dehydrated(true),
 
+                // 3. KOTAK PANDUAN SOP (Hanya muncul jika meteran berstatus Rusak)
+                Placeholder::make('panduan_meter_rusak')
+                    ->label('')
+                    ->content(new HtmlString(
+                        '<div style="padding: 1rem; background: #FEF2F2;
+                                     border-radius: 8px; color: #991B1B;
+                                     border: 1px solid #F87171; margin-bottom: 1rem;">
+                            <strong style="font-size: 1.1em;">⚠️ PANDUAN FINAL BILLING (METER RUSAK)</strong><br><br>
+                            Anda memilih meteran yang saat ini berstatus <strong>Rusak</strong>. Sistem mengizinkan pencatatan ini <strong>hanya untuk menagih sisa hutang pemakaian (Final Billing)</strong> sebelum meteran ini dicabut.<br><br>
+                            <em>SOP Admin: Setelah tagihan untuk pencatatan ini digenerate, pastikan meteran fisik sudah diganti dengan yang baru, lalu ubah status meteran ini menjadi "Nonaktif".</em>
+                        </div>'
+                    ))
+                    ->columnSpanFull()
+                    // Reaktif: Cek ke database status meteran setiap kali dropdown berubah
+                    ->visible(function (Get $get) {
+                        $meterId = $get('meter_air_id');
+                        if (!$meterId) return false;
+
+                        $meter = MeterAir::find($meterId);
+                        return $meter?->status === 'Rusak';
+                    }),
+
                 Grid::make(2)->schema([
                     Select::make('periode_bulan')
                         ->label('Bulan')
                         ->required()
+                        ->disabledOn('edit')
+                        ->dehydrated(true)
                         ->options([
                             1 => 'Januari',  2 => 'Februari', 3 => 'Maret',
                             4 => 'April',    5 => 'Mei',       6 => 'Juni',
@@ -81,6 +108,8 @@ class PencatatanMeterForm
                     TextInput::make('periode_tahun')
                         ->label('Tahun')
                         ->required()
+                        ->disabledOn('edit')
+                        ->dehydrated(true)
                         ->numeric()
                         ->minValue(2000)
                         ->maxValue(now()->year + 1)

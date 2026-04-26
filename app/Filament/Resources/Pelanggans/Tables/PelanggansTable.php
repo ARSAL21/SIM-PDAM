@@ -15,6 +15,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class PelanggansTable
 {
@@ -118,7 +119,30 @@ class PelanggansTable
             ->defaultSort('created_at', 'desc')
             ->recordActions([
                 EditAction::make(),
-
+                Action::make('delete')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    // ── Terapkan Guard di Sini (Override di Level Table) ──
+                    ->disabled(function ($record) {
+                        // Kunci jika pernah punya meter air atau tagihan
+                        return $record->meterAirs()->exists() || $record->tagihans()->exists();
+                    })
+                    ->tooltip(function ($record) {
+                        if ($record->meterAirs()->exists()) {
+                            return 'Tidak bisa dihapus — sudah memiliki riwayat meter air.';
+                        }
+                        if ($record->tagihans()->exists()) {
+                            return 'Tidak bisa dihapus — sudah memiliki tagihan.';
+                        }
+                        return null;
+                    })
+                    ->requiresConfirmation()
+                    ->modalHeading('Konfirmasi Penghapusan')
+                    ->modalDescription('Apakah Anda yakin ingin menghapus data pelanggan ini? Data yang terhubung dengan meter air tidak dapat dihapus.')
+                    ->modalSubmitActionLabel('Ya, Hapus Saja')
+                    ->action(function ($record) {
+                        $record->delete();
+                    }),
                 // ── Action Navigasi "Lihat Meter" (Task 4b) ──
                 Action::make('lihat_meter')
                     ->label('Lihat Meter')
@@ -133,7 +157,27 @@ class PelanggansTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            // Filter hanya pelanggan yang masih "Bersih" (Belum punya meter & tagihan)
+                            $blocked = $records->filter(fn (Model $record) => 
+                                $record->meterAirs()->exists() || $record->tagihans()->exists()
+                            );
+
+                            if ($blocked->isNotEmpty()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->danger()
+                                    ->title('Sebagian Aksi Ditolak!')
+                                    ->body("{$blocked->count()} pelanggan tidak dapat dihapus karena memiliki riwayat operasional. Sistem hanya menghapus pelanggan yang belum berelasi.")
+                                    ->send();
+
+                                // Hapus yang aman saja
+                                $safeRecords = $records->diff($blocked);
+                                $safeRecords->each->delete();
+                            } else {
+                                $records->each->delete();
+                            }
+                        }),
                 ]),
             ]);
     }

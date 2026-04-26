@@ -3,12 +3,15 @@
 namespace App\Filament\Resources\MeterAirs\Schemas;
 
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 class MeterAirForm
 {
@@ -97,9 +100,14 @@ class MeterAirForm
                     ->options([
                         'Aktif'    => 'Aktif',
                         'Rusak'    => 'Rusak',
-                        'Diganti'  => 'Diganti',
                         'Nonaktif' => 'Nonaktif',
                     ])
+                    ->live()
+                    ->afterStateUpdated(function ($state, $set) {
+                        if ($state === 'Aktif') {
+                            $set('keterangan', null);  // Kosongkan keterangan saat di-set Aktif
+                        }
+                    })
                     ->default('Aktif')
                     ->required()
                     ->rules([
@@ -145,6 +153,21 @@ class MeterAirForm
                             }
                         },
                     ]),
+                    Placeholder::make('warning_nonaktif')
+                        ->label('')
+                        ->visible(fn (Get $get) => $get('status') === 'Nonaktif')
+                        ->content(new HtmlString('
+                            <div style="padding: 1rem; background: #FEF2F2; border-radius: 8px; color: #991B1B; border: 1px solid #F87171;">
+                                <strong>🚨 PERINGATAN KERAS:</strong> Menyetel status ke <strong>Nonaktif</strong> akan membuat pelanggan ini tidak bisa dicatat lagi meteran airnya selamanya (kecuali diaktifkan kembali). Pastikan Final Billing sudah dibayar!
+                            </div>
+                        ')),
+
+                    Textarea::make('keterangan')
+                        ->label('Alasan/Keterangan Status')
+                        ->placeholder('Contoh: Pelanggan berhenti berlangganan atau ganti meteran...')
+                        ->required(fn (Get $get) => $get('status') === 'Nonaktif') // WAJIB jika Nonaktif
+                        ->columnSpanFull()
+                        ->helperText('Jika menonaktifkan meteran, alasan wajib dicantumkan untuk keperluan audit.'),
             ]);
     }
 }

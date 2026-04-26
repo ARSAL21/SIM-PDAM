@@ -116,6 +116,7 @@ class PencatatanMetersTable
                 ActionsViewAction::make(),
                 
                 ActionsEditAction::make()
+                    ->disabled(fn ($record) => ! \App\Filament\Resources\PencatatanMeters\PencatatanMeterResource::canEdit($record))
                     ->tooltip(fn ($record) =>
                         in_array($record->tagihan?->status_bayar, ['Menunggu Verifikasi', 'Lunas'])
                             ? 'Tidak dapat diedit — tagihan sedang diproses atau lunas.'
@@ -139,11 +140,49 @@ class PencatatanMetersTable
                     }),
 
                 ActionsDeleteAction::make()
-                    ->tooltip(fn ($record) =>
-                        $record->tagihan()->exists()
-                            ? 'Tidak dapat dihapus — sudah memiliki tagihan.'
-                            : 'Hapus pencatatan'
-                    ),
+                    ->disabled(function ($record) {
+                        // Kunci jika ada tagihan
+                        if ($record->tagihan()->exists()) {
+                            return true;
+                        }
+
+                        // Kunci jika ada data di bulan setelahnya (Middle-Chain)
+                        $adaPeriodeLebihBaru = PencatatanMeter::where('meter_air_id', $record->meter_air_id)
+                            ->where('id', '!=', $record->id)
+                            ->where(fn ($q) => $q
+                                ->where('periode_tahun', '>', $record->periode_tahun)
+                                ->orWhere(fn ($q) => $q
+                                    ->where('periode_tahun', $record->periode_tahun)
+                                    ->where('periode_bulan', '>', $record->periode_bulan)
+                                )
+                            )
+                            ->exists();
+
+                        return $adaPeriodeLebihBaru;
+                    })
+                    
+                    ->tooltip(function ($record) {
+                        if ($record->tagihan()->exists()) {
+                            return 'Tidak dapat dihapus — sudah memiliki tagihan.';
+                        }
+
+                        $adaPeriodeLebihBaru = PencatatanMeter::where('meter_air_id', $record->meter_air_id)
+                            ->where('id', '!=', $record->id)
+                            ->where(fn ($q) => $q
+                                ->where('periode_tahun', '>', $record->periode_tahun)
+                                ->orWhere(fn ($q) => $q
+                                    ->where('periode_tahun', $record->periode_tahun)
+                                    ->where('periode_bulan', '>', $record->periode_bulan)
+                                )
+                            )
+                            ->exists();
+
+                        if ($adaPeriodeLebihBaru) {
+                            return 'Tidak dapat dihapus — ada pencatatan di bulan setelahnya. Hapus yang terbaru dulu.';
+                        }
+
+                        return 'Hapus pencatatan';
+                    }),
             ]);
     }
 }

@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class PelangganResource extends Resource
 {
@@ -22,6 +23,17 @@ class PelangganResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    /**
+     * Guard Delete (Menahan Efek Black Hole)
+     * Pelanggan tidak boleh dihapus jika sudah memiliki meter air (meski nonaktif) 
+     * atau sudah memiliki tagihan. Cukup matikan toggle "Status Aktif" saja.
+     */
+    public static function canDelete(Model $record): bool
+    {
+        // Tolak jika pernah punya meter air atau pernah punya tagihan
+        return ! $record->meterAirs()->exists() && ! $record->tagihans()->exists();
+    }
+    
     public static function form(Schema $schema): Schema
     {
         return PelangganForm::configure($schema);

@@ -71,11 +71,34 @@ class PencatatanMeterResource extends Resource
 
     /**
      * Guard Delete — Lapis 1 (Resource-level)
-     * Blok delete jika sudah ada tagihan.
+     * Blok delete jika:
+     * 1. Sudah ada tagihan.
+     * 2. Ada pencatatan di periode yang lebih baru (mencegah rantai waktu terputus).
      */
     public static function canDelete(Model $record): bool
     {
-        return ! $record->tagihan()->exists();
+        // Aturan 1: Tidak boleh dihapus jika sudah ada tagihan
+        if ($record->tagihan()->exists()) {
+            return false;
+        }
+
+        // Aturan 2: Tidak boleh dihapus jika ada periode yang lebih baru (Middle-Chain Deletion)
+        $adaPeriodeLebihBaru = PencatatanMeter::where('meter_air_id', $record->meter_air_id)
+            ->where('id', '!=', $record->id)
+            ->where(fn ($q) => $q
+                ->where('periode_tahun', '>', $record->periode_tahun)
+                ->orWhere(fn ($q) => $q
+                    ->where('periode_tahun', $record->periode_tahun)
+                    ->where('periode_bulan', '>', $record->periode_bulan)
+                )
+            )
+            ->exists();
+
+        if ($adaPeriodeLebihBaru) {
+            return false;
+        }
+
+        return true;
     }
 
     public static function getPages(): array

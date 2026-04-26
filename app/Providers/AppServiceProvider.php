@@ -20,5 +20,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         \App\Models\Pelanggan::observe(\App\Observers\PelangganObserver::class);
+        \App\Models\PencatatanMeter::observe(\App\Observers\PencatatanMeterObserver::class);
     }
 }

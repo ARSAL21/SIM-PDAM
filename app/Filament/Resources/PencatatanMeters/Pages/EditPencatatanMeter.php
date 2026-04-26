@@ -15,8 +15,7 @@ class EditPencatatanMeter extends EditRecord
     {
         return [
             DeleteAction::make()
-            //gunakan guard dari resource agar lebih konsisten dan tidak dapat di baypas
-            ->hidden(fn () => ! static::getResource()::canDelete($this->getRecord())),
+                ->hidden(fn () => ! static::getResource()::canDelete($this->getRecord())),
         ];
     }
 

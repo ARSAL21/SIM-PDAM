@@ -11,6 +11,21 @@ class CreatePencatatanMeter extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        //Mencegah Race Condition / Error 500
+        $sudahDicatat = \App\Models\PencatatanMeter::where('meter_air_id', $data['meter_air_id'])
+            ->where('periode_bulan', $data['periode_bulan'])
+            ->where('periode_tahun', $data['periode_tahun'])
+            ->exists();
+
+        if ($sudahDicatat) {
+            \Filament\Notifications\Notification::make()
+                ->danger()
+                ->title('Gagal Disimpan')
+                ->body('Meter air ini sudah dicatat untuk periode tersebut. Silakan cek tabel riwayat.')
+                ->send();
+
+            $this->halt();
+        }
         // Strict Chronological — server side
         $adaPeriodeLebihBaru = \App\Models\PencatatanMeter::where('meter_air_id', $data['meter_air_id'])
             ->where(fn ($q) => $q
