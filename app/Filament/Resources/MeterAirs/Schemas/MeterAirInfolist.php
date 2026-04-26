@@ -103,6 +103,15 @@ class MeterAirInfolist
                                 return 'Telah beroperasi: ' . $tanggalPasang->diffForHumans(['parts' => 2]);
                             }),
 
+                        TextEntry::make('pencatatan_terakhir')
+                            ->label('Tgl Pencatatan Terakhir')
+                            ->state(function ($record) {
+                                $lastRecord = $record->pencatatanMeters()->latest('created_at')->first();
+                                return $lastRecord ? $lastRecord->created_at->translatedFormat('d F Y') : 'Belum pernah dicatat';
+                            })
+                            ->icon('heroicon-m-clock')
+                            ->color('gray'),
+
                         TextEntry::make('total_pencatatan')
                             ->label('Total Riwayat Catat')
                             ->state(function ($record) {
@@ -110,6 +119,17 @@ class MeterAirInfolist
                             })
                             ->icon('heroicon-m-clipboard-document-list')
                             ->color('gray'),
+
+                        TextEntry::make('angka_terkini')
+                            ->label('Angka Meter Terkini')
+                            ->state(function ($record) {
+                                $lastRecord = $record->pencatatanMeters()->latest('periode_tahun')->latest('periode_bulan')->first();
+                                return $lastRecord ? $lastRecord->angka_akhir . ' m³' : $record->angka_awal . ' m³';
+                            })
+                            ->size(TextSize::Large)
+                            ->weight(FontWeight::ExtraBold)
+                            ->color('info')
+                            ->helperText('Berdasarkan pencatatan terakhir.'),
 
                         TextEntry::make('total_volume_air')
                             ->label('Total Beban Volume Air')
