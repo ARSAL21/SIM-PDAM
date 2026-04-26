@@ -22,6 +22,7 @@ class PelanggansTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->recordUrl(fn ($record) => \App\Filament\Resources\Pelanggans\PelangganResource::getUrl('view', ['record' => $record]))
             ->columns([
                 // ── Kolom Informasi Utama ──
                 TextColumn::make('user.name')

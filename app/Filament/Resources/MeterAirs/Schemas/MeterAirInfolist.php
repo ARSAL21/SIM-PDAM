@@ -3,82 +3,124 @@
 namespace App\Filament\Resources\MeterAirs\Schemas;
 
 use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Components\Section;
-use Filament\Schemas\Components\Section as ComponentsSection;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Model;
+use Filament\Support\Enums\FontWeight;
+use Filament\Support\Enums\TextSize;
+use Carbon\Carbon;
+use Filament\Schemas\Components\Group as ComponentsGroup;
+use Filament\Schemas\Components\Section as ComponentsSection;
 
 class MeterAirInfolist
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
-            ->components([
-                TextEntry::make('pelanggan.user.name')
-                    ->label('Pemilik'),
-                TextEntry::make('pelanggan.no_pelanggan')
-                    ->label('No. Pelanggan'),
-                TextEntry::make('nomor_meter')
-                    ->label('Nomor Meter'),
-                TextEntry::make('merek')
-                    ->label('Merek'),
-                TextEntry::make('tanggal_pasang')
-                    ->date(),
-                TextEntry::make('angka_awal'),
-                TextEntry::make('status')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'Aktif' => 'success',
-                        'Rusak' => 'danger',
-                        'Diganti' => 'warning',
-                        default => 'gray',
-                    }),
-                    
-                ComponentsSection::make('Riwayat Oper Kontrak')
-                    ->visible(fn ($record) => 
-                        $record->melanjutkan_dari_id || 
-                        filled($record->oper_dari_nomor_meter) || 
-                        $record->dilanjutkanOleh
-                    )
+            ->schema([
+                ComponentsSection::make('Informasi Pelanggan & Lokasi')
+                    ->icon('heroicon-o-map-pin')
+                    ->description('Identitas kepemilikan dan lokasi pemasangan meteran.')
+                    ->columns(2)
                     ->schema([
-                        TextEntry::make('oper_dari_meter')
-                            ->label('Melanjutkan dari Meter')
-                            ->visible(fn ($record) => 
-                                $record->melanjutkan_dari_id || filled($record->oper_dari_nomor_meter)
-                            )
-                            ->state(function (Model $record) {
-                                $nomor = $record->melanjutkanDari?->nomor_meter
-                                         ?? $record->oper_dari_nomor_meter;
+                        TextEntry::make('pelanggan.user.name')
+                            ->label('Nama Pemilik')
+                            ->weight(FontWeight::Bold)
+                            ->color('primary')
+                            ->icon('heroicon-m-user'),
 
-                                $nama = $record->melanjutkanDari?->pelanggan?->user?->name
-                                        ?? $record->oper_dari_nama_pelanggan;
+                        TextEntry::make('pelanggan.no_pelanggan')
+                            ->label('No. Pelanggan')
+                            ->copyable()
+                            ->copyMessage('Disalin!'),
 
-                                if (!$nomor) return null;
-                                return "{$nomor} — milik {$nama}";
+                        TextEntry::make('pelanggan.golonganTarif.nama_golongan')
+                            ->label('Golongan Tarif')
+                            ->badge()
+                            ->color('info')
+                            ->icon('heroicon-m-currency-dollar'),
+
+                        TextEntry::make('pelanggan.alamat')
+                            ->label('Alamat Pemasangan')
+                            ->icon('heroicon-m-building-office-2')
+                            ->columnSpanFull(),
+                    ]),
+
+                ComponentsSection::make('Spesifikasi & Status Alat')
+                    ->icon('heroicon-o-wrench-screwdriver')
+                    ->columns(3)
+                    ->schema([
+                        ComponentsGroup::make([
+                            TextEntry::make('nomor_meter')
+                                ->label('Nomor Seri Meter')
+                                ->size(TextSize::Large)
+                                ->weight(FontWeight::ExtraBold)
+                                ->copyable(),
+
+                            TextEntry::make('merek')
+                                ->label('Merek Pabrikan')
+                                ->default('Tidak diketahui')
+                                ->color('gray'),
+                        ]),
+
+                        ComponentsGroup::make([
+                            TextEntry::make('angka_awal')
+                                ->label('Angka Awal Pemasangan')
+                                ->suffix(' m³')
+                                ->weight(FontWeight::Bold),
+
+                            TextEntry::make('status')
+                                ->label('Status Alat')
+                                ->badge()
+                                ->size(TextSize::Large)
+                                ->color(fn (string $state): string => match ($state) {
+                                    'Aktif'    => 'success',
+                                    'Rusak'    => 'warning',
+                                    'Nonaktif' => 'danger',
+                                    default    => 'gray',
+                                }),
+                        ]),
+
+                        // Peringatan jika rusak/nonaktif
+                        TextEntry::make('keterangan')
+                            ->label('Catatan Status / Riwayat')
+                            ->color(fn ($record) => $record->status === 'Aktif' ? 'gray' : 'danger')
+                            ->weight(fn ($record) => $record->status === 'Aktif' ? FontWeight::Normal : FontWeight::Bold)
+                            ->default('-')
+                            ->columnSpan(1),
+                    ]),
+
+                // 3. KELOMPOK STATISTIK OPERASIONAL
+                ComponentsSection::make('Statistik Operasional (Life Cycle)')
+                    ->icon('heroicon-o-chart-pie')
+                    ->description('Rekam jejak dan beban kerja meteran air ini sejak dipasang.')
+                    ->columns(3)
+                    ->schema([
+                        TextEntry::make('tanggal_pasang')
+                            ->label('Tanggal Pasang')
+                            ->date('d F Y')
+                            ->icon('heroicon-m-calendar')
+                            ->helperText(function ($record) {
+                                $tanggalPasang = Carbon::parse($record->tanggal_pasang);
+                                return 'Telah beroperasi: ' . $tanggalPasang->diffForHumans(['parts' => 2]);
                             }),
 
-                        TextEntry::make('tanggal_nonaktif_history')
-                            ->label('Pelanggan Sebelumnya Berhenti Pada')
-                            ->state(function (Model $record) {
-                                if ($record->melanjutkan_dari_id || filled($record->oper_dari_nomor_meter)) {
-                                    return $record->melanjutkanDari?->tanggal_nonaktif
-                                           ?? $record->oper_dari_tanggal_nonaktif;
-                                }
-                                return $record->tanggal_nonaktif;
+                        TextEntry::make('total_pencatatan')
+                            ->label('Total Riwayat Catat')
+                            ->state(function ($record) {
+                                return $record->pencatatanMeters()->count() . ' Bulan / Kali';
                             })
-                            ->date('d M Y')
-                            ->placeholder('—'),
+                            ->icon('heroicon-m-clipboard-document-list')
+                            ->color('gray'),
 
-                        TextEntry::make('tanggal_oper_kontrak')
-                            ->label('Tanggal Oper Kontrak (Pelanggan Baru Mulai)')
-                            ->visible(fn ($record) => $record->tanggal_oper_kontrak)
-                            ->date('d M Y'),
-
-                        TextEntry::make('dilanjutkanOleh.pelanggan.user.name')
-                            ->label('Diteruskan ke Pelanggan')
-                            ->visible(fn ($record) => $record->dilanjutkanOleh)
-                            ->formatStateUsing(fn ($state, $record) => "{$state} — mulai: " . ($record->dilanjutkanOleh->tanggal_oper_kontrak?->format('d M Y') ?? '-')
-                            ),
+                        TextEntry::make('total_volume_air')
+                            ->label('Total Beban Volume Air')
+                            ->state(function ($record) {
+                                $totalAir = $record->pencatatanMeters()->sum('pemakaian_m3');
+                                return number_format($totalAir, 0, ',', '.') . ' m³';
+                            })
+                            ->size(TextSize::Large)
+                            ->weight(FontWeight::ExtraBold)
+                            ->color('primary')
+                            ->helperText('Total kubikasi yang telah diukur.'),
                     ]),
             ]);
     }

@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Pelanggans;
 use App\Filament\Resources\Pelanggans\Pages\CreatePelanggan;
 use App\Filament\Resources\Pelanggans\Pages\EditPelanggan;
 use App\Filament\Resources\Pelanggans\Pages\ListPelanggans;
+use App\Filament\Resources\Pelanggans\Pages\ViewPelanggan;
 use App\Filament\Resources\Pelanggans\Schemas\PelangganForm;
+use App\Filament\Resources\Pelanggans\Schemas\PelangganInfolist;
 use App\Filament\Resources\Pelanggans\Tables\PelanggansTable;
 use App\Models\Pelanggan;
 use BackedEnum;
@@ -39,6 +41,12 @@ class PelangganResource extends Resource
         return PelangganForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        // Memanggil skema yang sudah dipisah ke class tersendiri
+        return PelangganInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return PelanggansTable::configure($table);
@@ -56,6 +64,7 @@ class PelangganResource extends Resource
         return [
             'index' => ListPelanggans::route('/'),
             'create' => CreatePelanggan::route('/create'),
+            'view' => ViewPelanggan::route('/{record}'),
             'edit' => EditPelanggan::route('/{record}/edit'),
         ];
     }

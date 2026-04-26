@@ -5,9 +5,10 @@ namespace App\Filament\Resources\PencatatanMeters\Tables;
 use App\Models\PencatatanMeter;
 use Carbon\Carbon;
 use Filament\Actions\Action as ActionsAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction as ActionsDeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction as ActionsEditAction;
-use Filament\Actions\ViewAction as ActionsViewAction;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -20,17 +21,23 @@ class PencatatanMetersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->recordUrl(fn ($record) => \App\Filament\Resources\PencatatanMeters\PencatatanMeterResource::getUrl('view', ['record' => $record]))
             ->columns([
                 TextColumn::make('meterAir.nomor_meter')
                     ->label('Nomor Meter')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('meterAir.pelanggan.user.name')
                     ->label('Nama Pelanggan')
-                    ->searchable(),
+                    ->searchable()
+                    ->weight(FontWeight::Bold)
+                    ->toggleable(),
 
                 TextColumn::make('periode')
                     ->label('Periode')
+                    ->badge()
+                    ->color('info')
                     ->getStateUsing(fn ($record) =>
                         Carbon::create($record->periode_tahun, $record->periode_bulan)
                             ->translatedFormat('F Y')
@@ -38,23 +45,28 @@ class PencatatanMetersTable
                     ->sortable(query: fn ($query, $direction) =>
                         $query->orderBy('periode_tahun', $direction)
                               ->orderBy('periode_bulan', $direction)
-                    ),
+                    )
+                    ->toggleable(),
 
                 TextColumn::make('angka_awal')
                     ->label('Angka Awal')
                     ->numeric()
-                    ->alignRight(),
+                    ->alignRight()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('angka_akhir')
                     ->label('Angka Akhir')
                     ->numeric()
-                    ->alignRight(),
+                    ->alignRight()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('pemakaian_m3')
                     ->label('Pemakaian (m³)')
                     ->numeric()
                     ->alignRight()
-                    ->weight(FontWeight::Medium),
+                    ->weight(FontWeight::ExtraBold)
+                    ->color('primary')
+                    ->toggleable(),
 
                 TextColumn::make('tagihan.status_bayar')
                     ->label('Status Tagihan')
@@ -65,7 +77,8 @@ class PencatatanMetersTable
                         'Menunggu Verifikasi' => 'info',
                         'Lunas'               => 'success',
                         default               => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
 
                 IconColumn::make('catatan_koreksi')
                     ->label('Dikoreksi')
@@ -74,10 +87,16 @@ class PencatatanMetersTable
                     ->falseIcon('')
                     ->trueColor('warning')
                     ->tooltip(fn ($record) => $record->catatan_koreksi ?? '')
-                    ->getStateUsing(fn ($record) => filled($record->catatan_koreksi)),
+                    ->getStateUsing(fn ($record) => filled($record->catatan_koreksi))
+                    ->toggleable(),
 
                 TextColumn::make('petugas.name')
                     ->label('Dicatat Oleh')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                
+                TextColumn::make('created_at')
+                    ->label('Tgl Input')
+                    ->dateTime('d M Y, H:i')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
@@ -113,8 +132,6 @@ class PencatatanMetersTable
                     ->query(fn ($query) => $query->whereNotNull('catatan_koreksi')),
             ])
             ->recordActions([
-                ActionsViewAction::make(),
-                
                 ActionsEditAction::make()
                     ->disabled(fn ($record) => ! \App\Filament\Resources\PencatatanMeters\PencatatanMeterResource::canEdit($record))
                     ->tooltip(fn ($record) =>
@@ -183,6 +200,27 @@ class PencatatanMetersTable
 
                         return 'Hapus pencatatan';
                     }),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $blocked = $records->filter(fn ($record) => $record->tagihan()->exists());
+
+                            if ($blocked->isNotEmpty()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->danger()
+                                    ->title('Sebagian Aksi Ditolak!')
+                                    ->body("{$blocked->count()} pencatatan tidak dapat dihapus karena sudah memiliki tagihan aktif.")
+                                    ->send();
+
+                                $safeRecords = $records->diff($blocked);
+                                $safeRecords->each->delete();
+                            } else {
+                                $records->each->delete();
+                            }
+                        }),
+                ]),
             ]);
     }
 }

@@ -70,7 +70,6 @@ class MeterAirsTable
                     ]),
             ])
             ->recordActions([
-                ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make()
                     ->before(function (DeleteAction $action, Model $record) {
