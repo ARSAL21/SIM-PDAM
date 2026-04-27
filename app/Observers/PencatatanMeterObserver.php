@@ -24,9 +24,9 @@ class PencatatanMeterObserver
     }
 
     /**
-     * Handle the PencatatanMeter "deleted" event.
+     * Handle the PencatatanMeter "deleting" event.
      */
-    public function deleted(PencatatanMeter $pencatatan): void
+    public function deleting(PencatatanMeter $pencatatan): void
     {
         // 1. Guard Tagihan
         if ($pencatatan->tagihan()->exists()) {

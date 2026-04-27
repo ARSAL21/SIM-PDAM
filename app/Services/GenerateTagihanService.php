@@ -62,7 +62,8 @@ class GenerateTagihanService
 
             $meterAir->update([
                 'status' => 'Nonaktif',
-                'keterangan' => $catatanFinal // Pastikan kolom ini ada di migration meter_airs
+                'keterangan' => $catatanFinal,
+                'tanggal_nonaktif' => now()->toDateString(),
             ]);
         }
 
