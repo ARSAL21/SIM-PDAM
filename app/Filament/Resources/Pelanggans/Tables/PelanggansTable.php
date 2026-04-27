@@ -15,12 +15,14 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class PelanggansTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->recordUrl(fn ($record) => \App\Filament\Resources\Pelanggans\PelangganResource::getUrl('view', ['record' => $record]))
             ->columns([
                 // ── Kolom Informasi Utama ──
                 TextColumn::make('user.name')
@@ -118,7 +120,30 @@ class PelanggansTable
             ->defaultSort('created_at', 'desc')
             ->recordActions([
                 EditAction::make(),
-
+                Action::make('delete')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    // ── Terapkan Guard di Sini (Override di Level Table) ──
+                    ->disabled(function ($record) {
+                        // Kunci jika pernah punya meter air atau tagihan
+                        return $record->meterAirs()->exists() || $record->tagihans()->exists();
+                    })
+                    ->tooltip(function ($record) {
+                        if ($record->meterAirs()->exists()) {
+                            return 'Tidak bisa dihapus — sudah memiliki riwayat meter air.';
+                        }
+                        if ($record->tagihans()->exists()) {
+                            return 'Tidak bisa dihapus — sudah memiliki tagihan.';
+                        }
+                        return null;
+                    })
+                    ->requiresConfirmation()
+                    ->modalHeading('Konfirmasi Penghapusan')
+                    ->modalDescription('Apakah Anda yakin ingin menghapus data pelanggan ini? Data yang terhubung dengan meter air tidak dapat dihapus.')
+                    ->modalSubmitActionLabel('Ya, Hapus Saja')
+                    ->action(function ($record) {
+                        $record->delete();
+                    }),
                 // ── Action Navigasi "Lihat Meter" (Task 4b) ──
                 Action::make('lihat_meter')
                     ->label('Lihat Meter')
@@ -131,9 +156,39 @@ class PelanggansTable
                     ->color('info')
                     ->openUrlInNewTab(false),
             ])
-            ->toolbarActions([
+            ->toolbarActions([ // <-- Ganti menjadi bulkActions
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                   DeleteBulkAction::make()
+                        ->successNotification(null)
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            
+                            // 1. Filter Pelanggan yang "Kotor"
+                            $blocked = $records->filter(fn ($record) => 
+                                $record->meterAirs()->exists() || $record->tagihans()->exists()
+                            );
+
+                            $safeRecords = $records->diff($blocked);
+
+                            // 2. Eksekusi Hapus & Notif Sukses untuk yang "Bersih"
+                            if ($safeRecords->isNotEmpty()) {
+                                $safeRecords->each->delete();
+
+                                \Filament\Notifications\Notification::make()
+                                    ->success()
+                                    ->title('Penghapusan Berhasil')
+                                    ->body("{$safeRecords->count()} pelanggan telah dihapus permanen.")
+                                    ->send();
+                            }
+
+                            // 3. Notif Ditolak untuk yang "Kotor"
+                            if ($blocked->isNotEmpty()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->danger()
+                                    ->title('Sebagian Aksi Ditolak!')
+                                    ->body("{$blocked->count()} pelanggan tidak dapat dihapus karena memiliki riwayat operasional.")
+                                    ->send();
+                            }
+                        }),
                 ]),
             ]);
     }

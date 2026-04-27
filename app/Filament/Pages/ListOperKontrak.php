@@ -24,7 +24,7 @@ class ListOperKontrak extends Page implements HasTable
 
     protected static string|\UnitEnum|null $navigationGroup = 'Data Meter Air';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $title = 'Riwayat Oper Kontrak';
 

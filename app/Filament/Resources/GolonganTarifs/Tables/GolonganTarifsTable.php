@@ -42,7 +42,6 @@ class GolonganTarifsTable
                 //
             ])
             ->recordActions([
-                ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make()
                     ->before(function (DeleteAction $action, Model $record) {
@@ -58,26 +57,7 @@ class GolonganTarifsTable
                     }),
             ])
             ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make()
-                        ->action(function (Collection $records, DeleteBulkAction $action) {
-                            $used = $records->filter(fn (Model $record) => $record->pelanggans()->exists());
-
-                            if ($used->isNotEmpty()) {
-                                Notification::make()
-                                    ->danger()
-                                    ->title('Aksi Sebagian Ditolak!')
-                                    ->body("{$used->count()} golongan tarif tidak dapat dihapus karena masih digunakan pelanggan.")
-                                    ->send();
-                                
-                                // Hapus yang aman saja
-                                $safeRecords = $records->diff($used);
-                                $safeRecords->each->delete();
-                            } else {
-                                $records->each->delete();
-                            }
-                        }),
-                ]),
+                //
             ]);
     }
 }
