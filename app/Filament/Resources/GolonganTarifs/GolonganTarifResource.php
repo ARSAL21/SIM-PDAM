@@ -19,6 +19,10 @@ class GolonganTarifResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static ?string $modelLabel = 'Pengaturan Biaya';
+    protected static ?string $pluralModelLabel = 'Pengaturan Biaya';
+    protected static ?string $navigationLabel = 'Pengaturan Biaya';
+
     protected static ?string $recordTitleAttribute = 'nama_golongan';
 
     public static function form(Schema $schema): Schema

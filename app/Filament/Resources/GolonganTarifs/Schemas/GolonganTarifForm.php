@@ -15,21 +15,21 @@ class GolonganTarifForm
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(255)
-                    ->label('Nama Golongan'),
+                    ->label('Nama Kategori / Tarif'),
                 TextInput::make('tarif_per_kubik')
                     ->required()
                     ->minValue(0)
                     ->numeric()
                     ->default(7000)
                     ->prefix('Rp')
-                    ->label('Tarif per Kubik'),
+                    ->label('Harga Perkubik (Rp)'),
                 TextInput::make('biaya_admin')
                     ->required()
                     ->minValue(0)
                     ->numeric()
                     ->default(0)
                     ->prefix('Rp')
-                    ->label('Biaya Admin'),
+                    ->label('Biaya Beban (Rp)'),
             ]);
     }
 }

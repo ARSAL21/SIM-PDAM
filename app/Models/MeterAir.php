@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'pelanggan_id', 'nomor_meter', 'merek',
-    'tanggal_pasang', 'angka_awal', 'status',
+    'tanggal_pasang', 'angka_awal', 'status', 'keterangan',
     'melanjutkan_dari_id', 'tanggal_oper_kontrak','tanggal_nonaktif', 'oper_dari_nomor_meter','oper_dari_nama_pelanggan','oper_angka_serah_terima', 'oper_dari_tanggal_nonaktif', 'oper_dilakukan_oleh',
 ])]
 class MeterAir extends Model

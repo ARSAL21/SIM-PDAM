@@ -79,7 +79,9 @@ class MeterAirForm
 
                 TextInput::make('merek')
                     ->label('Merek')
-                    ->nullable(),
+                    ->minLength(4)
+                    ->maxLength(35)
+                    ->required(),
 
                 DatePicker::make('tanggal_pasang')
                     ->label('Tanggal Pasang')
@@ -117,6 +119,12 @@ class MeterAirForm
                             $value,
                             \Closure $fail
                         ) use ($get, $record) {
+                            if ($value === 'Aktif' && $record) {
+                                $keterangan = $record->keterangan ?? '';
+                                if (str_contains($keterangan, '[STATUS_FISIK:RUSAK]')) {
+                                    $fail('TIDAK DAPAT DIAKTIFKAN: Alat ini memiliki rekam jejak kerusakan fisik. Gunakan unit meteran baru.');
+                                }
+                            }
                             // Guard baru — blok reaktivasi meter yang sudah dioper kontrak
                             if ($value === 'Aktif' && $record?->dilanjutkanOleh) {
                                 $penerus = $record->dilanjutkanOleh->pelanggan->user->name;

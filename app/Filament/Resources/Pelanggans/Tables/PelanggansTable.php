@@ -37,11 +37,6 @@ class PelanggansTable
                     ->copyable()
                     ->copyMessage('Nomor pelanggan disalin!'),
 
-                TextColumn::make('golonganTarif.nama_golongan')
-                    ->label('Golongan Tarif')
-                    ->badge()
-                    ->sortable(),
-
                 // ── Kolom Status Meter (Task 3b) ──
                 TextColumn::make('status_meter')
                     ->label('Status Meter')
@@ -85,13 +80,6 @@ class PelanggansTable
                     ->label('Aktif'),
             ])
             ->filters([
-                // ── Filter Golongan Tarif ──
-                SelectFilter::make('golongan_tarif_id')
-                    ->label('Golongan Tarif')
-                    ->relationship('golonganTarif', 'nama_golongan')
-                    ->searchable()
-                    ->preload(),
-
                 // ── Filter Status Aktif ──
                 TernaryFilter::make('status_aktif')
                     ->label('Status Langganan')
