@@ -140,21 +140,14 @@ class PencatatanMetersTable
                             : 'Edit pencatatan'
                     ),
 
-                ActionsAction::make('generate_tagihan')
-                    ->label('Generate Tagihan')
+                ActionsAction::make('buat_tagihan')
+                    ->label('Buat Tagihan')
                     ->icon('heroicon-o-document-plus')
                     ->color('success')
                     ->hidden(fn ($record) => $record->tagihan()->exists())
-                    ->requiresConfirmation()
-                    ->action(function ($record) {
-                        $tagihan = \App\Services\GenerateTagihanService::execute($record);
-
-                        \Filament\Notifications\Notification::make()
-                            ->success()
-                            ->title('Tagihan berhasil digenerate.')
-                            ->body("No. Tagihan: {$tagihan->no_tagihan}")
-                            ->send();
-                    }),
+                    ->url(fn ($record) => \App\Filament\Resources\Tagihans\TagihanResource::getUrl('create', [
+                        'pencatatan_id' => $record->id,
+                    ])),
 
                 ActionsDeleteAction::make()
                     ->disabled(function ($record) {
