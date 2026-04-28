@@ -78,14 +78,6 @@ class PelangganForm
                     ->required()
                     ->unique(ignoreRecord: true),
 
-                // ── Kategori ──
-                Select::make('golongan_tarif_id')
-                    ->label('Golongan Tarif')
-                    ->relationship(name: 'golonganTarif', titleAttribute: 'nama_golongan')
-                    ->searchable()
-                    ->preload()
-                    ->required(),
-
                 // ── Kontak ──
                 TextInput::make('no_hp')
                     ->label('No. HP')

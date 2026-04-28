@@ -53,16 +53,16 @@ class GenerateTagihanService
         $meterAir = $pencatatan->meterAir;
         
         if ($meterAir->status === 'Rusak') {
-            $catatanOtomatis = "Dinonaktifkan otomatis oleh sistem setelah Final Billing pada " . now()->translatedFormat('d F Y') . ".";
+            $labelRusak = "[STATUS_FISIK:RUSAK] Alat ini telah dinyatakan rusak dan diganti.";
+            $catatanOtomatis = "Dinonaktifkan otomatis setelah Final Billing pada " . now()->translatedFormat('d F Y') . ".";
             
-            // Gabungkan dengan catatan lama jika ada, atau buat baru
-            // (Sesuaikan nama kolom 'catatan' atau 'keterangan' dengan yang ada di tabel meter_airs kamu)
             $catatanLama = $meterAir->keterangan ?? ''; 
-            $catatanFinal = $catatanLama ? $catatanLama . " | " . $catatanOtomatis : $catatanOtomatis;
+            $catatanFinal = $labelRusak . "\n" . $catatanOtomatis . ($catatanLama ? "\n---\n" . $catatanLama : "");
 
             $meterAir->update([
                 'status' => 'Nonaktif',
-                'keterangan' => $catatanFinal // Pastikan kolom ini ada di migration meter_airs
+                'keterangan' => $catatanFinal,
+                'tanggal_nonaktif' => now()->toDateString(),
             ]);
         }
 

@@ -43,7 +43,7 @@ class PencatatanMeterInfolist
                             ->color('gray'),
 
                         TextEntry::make('meterAir.pelanggan.golonganTarif.nama_golongan')
-                            ->label('Golongan Tarif')
+                            ->label('Kategori Tarif')
                             ->hint(fn ($record) => 'Tarif: IDR ' . number_format($record->meterAir->pelanggan->golonganTarif->tarif_per_kubik) . '/m³'),
 
                         TextEntry::make('meterAir.pelanggan.alamat')
@@ -145,10 +145,10 @@ class PencatatanMeterInfolist
                                 ),
 
                             TextEntry::make('meterAir.pelanggan.golonganTarif.biaya_admin')
-                                ->label('Biaya Administrasi')
+                                ->label('Biaya Beban (Rp)')
                                 ->html() 
                                 ->state(function ($record) {
-                                    $pencatatan = $record->pencatatan_meter_id ? $record->pencatatanMeter : $record;
+                                    $pencatatan = $record; // Langsung gunakan $record (Konteks Infolist ini = PencatatanMeter)
                                     $pelanggan = $pencatatan->meterAir->pelanggan;
                                     $biayaNormal = $pelanggan->golonganTarif->biaya_admin;
 

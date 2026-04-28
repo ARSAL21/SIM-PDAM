@@ -53,7 +53,7 @@ class PelangganInfolist
                                 ->default('-'),
 
                             TextEntry::make('golonganTarif.nama_golongan')
-                                ->label('Golongan Tarif')
+                                ->label('Kategori Tarif')
                                 ->badge()
                                 ->color('info')
                                 ->icon('heroicon-m-currency-dollar'),

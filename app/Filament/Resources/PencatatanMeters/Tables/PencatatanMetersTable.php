@@ -201,23 +201,43 @@ class PencatatanMetersTable
                         return 'Hapus pencatatan';
                     }),
             ])
-            ->toolbarActions([
+            ->toolbarActions([ 
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->successNotification(null) // Matikan bawaan Filament
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             
-                            // 1. Identifikasi data yang diblokir dan data yang aman
-                            $blocked = $records->filter(fn ($record) => $record->tagihan()->exists());
+                            // 1. Identifikasi data yang diblokir (Kondisi Tagihan ATAU Middle-Chain)
+                            $blocked = $records->filter(function ($record) {
+                                // Aturan A: Tolak jika sudah ada tagihan
+                                if ($record->tagihan()->exists()) {
+                                    return true;
+                                }
+
+                                // Aturan B: Tolak jika ada pencatatan yang lebih baru (Middle-Chain Deletion Guard)
+                                $adaPeriodeLebihBaru = PencatatanMeter::where('meter_air_id', $record->meter_air_id)
+                                    ->where('id', '!=', $record->id)
+                                    ->where(fn ($q) => $q
+                                        ->where('periode_tahun', '>', $record->periode_tahun)
+                                        ->orWhere(fn ($q) => $q
+                                            ->where('periode_tahun', $record->periode_tahun)
+                                            ->where('periode_bulan', '>', $record->periode_bulan)
+                                        )
+                                    )
+                                    ->exists();
+
+                                return $adaPeriodeLebihBaru;
+                            });
+
                             $safeRecords = $records->diff($blocked);
 
                             // 2. Eksekusi data yang aman & kirim notif sukses
                             if ($safeRecords->isNotEmpty()) {
-                                $safeRecords->each->delete(); // Hapus satu per satu agar event model tetap berjalan
+                                $safeRecords->each->delete(); // Hapus via each->delete() agar Observer tetap berjalan
 
                                 \Filament\Notifications\Notification::make()
                                     ->success()
-                                    ->title('Berhasil Dihapus')
+                                    ->title('Penghapusan Berhasil')
                                     ->body("{$safeRecords->count()} data pencatatan telah dihapus.")
                                     ->send();
                             }
@@ -227,7 +247,7 @@ class PencatatanMetersTable
                                 \Filament\Notifications\Notification::make()
                                     ->danger()
                                     ->title('Sebagian Aksi Ditolak!')
-                                    ->body("{$blocked->count()} pencatatan tidak dapat dihapus karena sudah memiliki tagihan aktif.")
+                                    ->body("{$blocked->count()} pencatatan tidak dapat dihapus karena sudah memiliki tagihan aktif ATAU terdapat riwayat di bulan setelahnya.")
                                     ->send();
                             }
                         }),

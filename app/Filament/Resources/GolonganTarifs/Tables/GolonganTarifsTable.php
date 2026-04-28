@@ -21,16 +21,16 @@ class GolonganTarifsTable
         return $table
             ->columns([
                 TextColumn::make('nama_golongan')
-                    ->label('Nama Golongan')
+                    ->label('Kategori')
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
                 TextColumn::make('tarif_per_kubik')
-                    ->label('Tarif / m³')
+                    ->label('Harga Perkubik')
                     ->money('IDR', locale: 'id')
                     ->sortable(),
                 TextColumn::make('biaya_admin')
-                    ->label('Biaya Admin')
+                    ->label('Biaya Beban')
                     ->money('IDR', locale: 'id')
                     ->sortable(),
                 TextColumn::make('pelanggans_count')
@@ -49,7 +49,7 @@ class GolonganTarifsTable
                             Notification::make()
                                 ->danger()
                                 ->title('Aksi Ditolak!')
-                                ->body('Golongan tarif ini tidak dapat dihapus karena masih digunakan oleh pelanggan.')
+                                ->body('Pengaturan biaya ini tidak dapat dihapus karena masih digunakan oleh pelanggan.')
                                 ->send();
 
                             $action->cancel();
