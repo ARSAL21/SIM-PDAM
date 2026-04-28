@@ -145,10 +145,10 @@ class PencatatanMeterInfolist
                                 ),
 
                             TextEntry::make('meterAir.pelanggan.golonganTarif.biaya_admin')
-                                ->label('Biaya Administrasi')
+                                ->label('Biaya Beban (Rp)')
                                 ->html() 
                                 ->state(function ($record) {
-                                    $pencatatan = $record->pencatatan_meter_id ? $record->pencatatanMeter : $record;
+                                    $pencatatan = $record; 
                                     $pelanggan = $pencatatan->meterAir->pelanggan;
                                     $biayaNormal = $pelanggan->golonganTarif->biaya_admin;
 

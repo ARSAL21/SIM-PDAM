@@ -96,7 +96,7 @@ class ListOperKontrak extends Page implements HasTable
                         )
                     ),
             ])
-            ->actions([
+            ->toolbarActions([
                 ViewAction::make()
                     ->modalHeading('Detail Riwayat Oper Kontrak')
                     ->modalWidth('4xl')
