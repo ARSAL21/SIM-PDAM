@@ -21,5 +21,6 @@ class AppServiceProvider extends ServiceProvider
     {
         \App\Models\Pelanggan::observe(\App\Observers\PelangganObserver::class);
         \App\Models\PencatatanMeter::observe(\App\Observers\PencatatanMeterObserver::class);
+        \App\Models\Pembayaran::observe(\App\Observers\PembayaranObserver::class);
     }
 }

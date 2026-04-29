@@ -119,7 +119,7 @@ class PelangganInfolist
                     ->schema([
                         RepeatableEntry::make('meterAirs')
                             ->label('')
-                            ->contained(false) // Tampilan flat modern
+                            ->contained(false) 
                             ->columns(4)
                             ->schema([
                                 TextEntry::make('nomor_meter')
