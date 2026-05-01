@@ -26,7 +26,7 @@ class PencatatanMeterForm
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search) =>
                         // 1. Buka akses untuk status Rusak
-                        MeterAir::whereIn('status', ['Aktif', 'Rusak'])
+                        MeterAir::query()->whereIn('status', ['Aktif', 'Rusak'])
                             ->whereHas('pelanggan', fn ($q) =>
                                 $q->where('status_aktif', true)
                             )
@@ -40,15 +40,14 @@ class PencatatanMeterForm
                             ->limit(20)
                             ->get()
                             ->mapWithKeys(fn ($meter) => [
-                                // 2. Tambahkan peringatan visual di dalam dropdown
                                 $meter->id => "[{$meter->nomor_meter}] " .
-                                              $meter->pelanggan->user->name .
+                                              ($meter->pelanggan?->nama_lengkap ?? 'N/A') .
                                               ($meter->status === 'Rusak' ? ' ⚠️ (RUSAK)' : '')
                             ])
                     )
                     ->getOptionLabelUsing(function ($value) {
                         $meter = MeterAir::with('pelanggan.user')->find($value);
-                        return $meter ? "[{$meter->nomor_meter}] {$meter->pelanggan->user->name}" . ($meter->status === 'Rusak' ? ' ⚠️ (RUSAK)' : '') : null;
+                        return $meter ? "[{$meter->nomor_meter}] " . ($meter->pelanggan?->nama_lengkap ?? 'N/A') . ($meter->status === 'Rusak' ? ' ⚠️ (RUSAK)' : '') : null;
                     })
                     ->live()
                     ->afterStateUpdated(function ($state, Set $set) {

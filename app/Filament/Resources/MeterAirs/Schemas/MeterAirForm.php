@@ -39,7 +39,7 @@ class MeterAirForm
                             return $query;
                         }
                     )
-                    ->getOptionLabelFromRecordUsing(fn (Model $record) => "{$record->user->name} ({$record->no_pelanggan})")
+                    ->getOptionLabelFromRecordUsing(fn (Model $record) => "{$record->nama_lengkap} ({$record->no_pelanggan})")
                     ->searchable(['no_pelanggan'])
                     ->preload()
                     ->disabledOn('edit')
@@ -127,7 +127,7 @@ class MeterAirForm
                             }
                             // Guard baru — blok reaktivasi meter yang sudah dioper kontrak
                             if ($value === 'Aktif' && $record?->dilanjutkanOleh) {
-                                $penerus = $record->dilanjutkanOleh->pelanggan->user->name;
+                                $penerus = $record->dilanjutkanOleh->pelanggan?->nama_lengkap ?? 'pelanggan lain';
                                 $fail(
                                     'Meter ini tidak dapat diaktifkan kembali karena sudah ' .
                                     "dioper kontrak ke {$penerus}. Jika pelanggan ini memerlukan " .
@@ -144,9 +144,10 @@ class MeterAirForm
                             // Guard existing — cek pelanggan nonaktif
                             $pelanggan = \App\Models\Pelanggan::with('user')->find($pelangganId);
                             if ($pelanggan && !$pelanggan->status_aktif) {
+                                $namaPelanggan = $pelanggan->nama_lengkap;
                                 $fail(
                                     'Meter tidak dapat diaktifkan karena pelanggan ' .
-                                    $pelanggan->user->name . ' sedang nonaktif.'
+                                    $namaPelanggan . ' sedang nonaktif.'
                                 );
                                 return;
                             }

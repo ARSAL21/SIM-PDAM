@@ -25,7 +25,7 @@ class PelanggansTable
             ->recordUrl(fn ($record) => \App\Filament\Resources\Pelanggans\PelangganResource::getUrl('view', ['record' => $record]))
             ->columns([
                 // ── Kolom Informasi Utama ──
-                TextColumn::make('user.name')
+                TextColumn::make('nama_lengkap')
                     ->label('Nama Pelanggan')
                     ->searchable()
                     ->sortable(),

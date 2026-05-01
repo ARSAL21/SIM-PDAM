@@ -20,7 +20,7 @@ class MeterAirsTable
         return $table
             ->recordUrl(fn ($record) => \App\Filament\Resources\MeterAirs\MeterAirResource::getUrl('view', ['record' => $record]))
             ->columns([
-                TextColumn::make('pelanggan.user.name')
+                TextColumn::make('pelanggan.nama_lengkap')
                     ->label('Pemilik')
                     ->searchable()
                     ->sortable(),

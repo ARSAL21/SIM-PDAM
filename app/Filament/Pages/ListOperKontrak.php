@@ -53,7 +53,7 @@ class ListOperKontrak extends Page implements HasTable
                     ->label('Pelanggan Sebelumnya')
                     ->searchable(),
 
-                TextColumn::make('pelanggan.user.name')
+                TextColumn::make('pelanggan.nama_lengkap')
                     ->label('Pelanggan Baru')
                     ->searchable(),
 

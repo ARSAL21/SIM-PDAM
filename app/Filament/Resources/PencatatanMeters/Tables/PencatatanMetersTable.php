@@ -28,7 +28,7 @@ class PencatatanMetersTable
                     ->searchable()
                     ->toggleable(),
 
-                TextColumn::make('meterAir.pelanggan.user.name')
+                TextColumn::make('meterAir.pelanggan.nama_lengkap')
                     ->label('Nama Pelanggan')
                     ->searchable()
                     ->weight(FontWeight::Bold)

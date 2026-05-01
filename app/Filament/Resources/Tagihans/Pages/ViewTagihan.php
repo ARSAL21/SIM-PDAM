@@ -32,7 +32,7 @@ class ViewTagihan extends ViewRecord
                         ->schema([
                             Placeholder::make('info_pelanggan')
                                 ->label('Nama Pelanggan')
-                                ->content($record->pelanggan?->user?->name ?? '-'),
+                                ->content($record->pelanggan?->nama_lengkap ?? '-'),
 
                             Placeholder::make('info_no_pelanggan')
                                 ->label('No. Pelanggan')

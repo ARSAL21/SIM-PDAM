@@ -72,13 +72,13 @@ class OperKontrak extends Page implements HasSchemas
                                         ->get()
                                         ->mapWithKeys(fn ($meter) => [
                                             $meter->id => "[{$meter->nomor_meter}] " .
-                                                          $meter->pelanggan->user->name
+                                                          ($meter->pelanggan?->nama_lengkap ?? 'N/A')
                                         ])
                                 )
                                 ->getOptionLabelUsing(function ($value) {
                                     $meter = MeterAir::with('pelanggan.user')->find($value);
                                     return $meter
-                                        ? "[{$meter->nomor_meter}] {$meter->pelanggan->user->name}"
+                                        ? "[{$meter->nomor_meter}] " . ($meter->pelanggan?->nama_lengkap ?? 'N/A')
                                         : null;
                                 })
                                 ->live()
@@ -91,7 +91,7 @@ class OperKontrak extends Page implements HasSchemas
                                     if (!$meter) return;
 
                                     $set('preview_nomor_meter', $meter->nomor_meter);
-                                    $set('preview_nama_pelanggan_lama', $meter->pelanggan->user->name);
+                                    $set('preview_nama_pelanggan_lama', $meter->pelanggan?->nama_lengkap);
                                     $set('preview_alamat_lama', $meter->pelanggan->alamat);
                                     $set('preview_angka_terakhir',
                                         $meter->pencatatanTerakhir?->angka_akhir
@@ -198,13 +198,13 @@ class OperKontrak extends Page implements HasSchemas
                                         ->limit(10)
                                         ->get()
                                         ->mapWithKeys(fn ($p) => [
-                                            $p->id => "{$p->user->name} ({$p->no_pelanggan})"
+                                            $p->id => "{$p->nama_lengkap} ({$p->no_pelanggan})"
                                         ])
                                 )
                                 ->getOptionLabelUsing(function ($value) {
                                     $p = Pelanggan::with('user')->find($value);
                                     return $p
-                                        ? "{$p->user->name} ({$p->no_pelanggan})"
+                                        ? "{$p->nama_lengkap} ({$p->no_pelanggan})"
                                         : null;
                                 })
                                 ->live()
@@ -213,7 +213,7 @@ class OperKontrak extends Page implements HasSchemas
                                     $pelanggan = Pelanggan::with('user')->find($state);
                                     if (!$pelanggan) return;
                                     $set('preview_alamat_baru', $pelanggan->alamat);
-                                    $set('preview_nama_pelanggan_baru', $pelanggan->user->name);
+                                    $set('preview_nama_pelanggan_baru', $pelanggan->nama_lengkap);
                                 }),
 
                             Placeholder::make('info_pelanggan_baru')
@@ -358,7 +358,7 @@ class OperKontrak extends Page implements HasSchemas
 
             // Snapshot permanen
             'oper_dari_nomor_meter'     => $meterLama->nomor_meter,
-            'oper_dari_nama_pelanggan'  => $meterLama->pelanggan->user->name,
+            'oper_dari_nama_pelanggan'  => $meterLama->pelanggan?->nama_lengkap,
             'oper_angka_serah_terima'   => $data['angka_awal_override'],
             'oper_dari_tanggal_nonaktif'=> $meterLama->tanggal_nonaktif,
             'oper_dilakukan_oleh'       => auth()->id(),

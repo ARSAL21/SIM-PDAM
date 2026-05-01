@@ -24,7 +24,7 @@ class PelangganInfolist
                     ->schema([
                         // Kolom Kiri: Identitas Utama
                         Group::make([
-                            TextEntry::make('user.name')
+                            TextEntry::make('nama_lengkap')
                                 ->label('Nama Lengkap')
                                 ->size(TextSize::Large)
                                 ->weight(FontWeight::ExtraBold)

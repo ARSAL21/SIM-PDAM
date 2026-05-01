@@ -18,7 +18,7 @@ class CreateMeterAir extends CreateRecord
 
             if ($meterLama) {
                 $data['oper_dari_nomor_meter']    = $meterLama->nomor_meter;
-                $data['oper_dari_nama_pelanggan'] = $meterLama->pelanggan->user->name;
+                $data['oper_dari_nama_pelanggan'] = $meterLama->pelanggan?->nama_lengkap;
                 $data['oper_angka_serah_terima']  = $meterLama->pencatatanTerakhir?->angka_akhir
                                                     ?? $meterLama->angka_awal;
                 $data['oper_dari_tanggal_nonaktif'] = $meterLama->tanggal_nonaktif;

@@ -67,7 +67,7 @@ class OperKontrakInfolist
                             ->description('Informasi pelanggan yang melanjutkan kontrak')
                             ->columnSpan(1)
                             ->schema([
-                                TextEntry::make('pelanggan.user.name')
+                                TextEntry::make('pelanggan.nama_lengkap')
                                     ->label('Nama Pelanggan Baru')
                                     ->weight(FontWeight::Bold)
                                     // 💡 TRIK PRO: Gunakan 'lg'

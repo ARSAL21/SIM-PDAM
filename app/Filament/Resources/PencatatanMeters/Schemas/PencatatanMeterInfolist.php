@@ -25,7 +25,7 @@ class PencatatanMeterInfolist
                     ->description('Detail pelanggan dan perangkat meter yang tercatat.')
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('meterAir.pelanggan.user.name')
+                        TextEntry::make('meterAir.pelanggan.nama_lengkap')
                             ->label('Nama Pelanggan')
                             ->weight(FontWeight::Bold)
                             ->color('primary')

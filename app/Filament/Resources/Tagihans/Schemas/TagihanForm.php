@@ -69,7 +69,7 @@ class TagihanForm
                     ->schema([
                         Placeholder::make('info_pelanggan')
                             ->label('Nama Pelanggan')
-                            ->content($pencatatan?->meterAir?->pelanggan?->user?->name ?? '-'),
+                            ->content($pencatatan?->meterAir?->pelanggan?->nama_lengkap ?? '-'),
 
                         Placeholder::make('info_no_pelanggan')
                             ->label('No. Pelanggan')
