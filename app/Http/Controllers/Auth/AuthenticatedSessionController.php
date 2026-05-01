@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use Illuminate\Validation\ValidationException;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -25,6 +26,22 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $request->authenticate();
+
+        $user = Auth::user();
+
+        // 2. CEK IDENTITAS (Pencegatan Siluman / Kamuflase)
+        // Keamanan: Jangan biarkan form publik menjadi pintu masuk admin.
+        if ($user->hasRole(['super_admin', 'admin', 'admin-PDAM'])) {
+            // Hancurkan sesi seketika
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            // Kamuflase: Lempar pesan error bawaan Laravel seolah kredensial salah
+            throw ValidationException::withMessages([
+                'email' => trans('auth.failed'),
+            ]);
+        }
 
         $request->session()->regenerate();
 

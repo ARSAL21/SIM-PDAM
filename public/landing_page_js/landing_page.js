@@ -47,6 +47,7 @@ kubikSlider.addEventListener("input", function () {
 });
 
 hitungSimulasi(20);
+
 // ─── NAVBAR HAMBURGER MENU ─────────────────────────
 (function () {
     const hamburger = document.getElementById("hamburgerBtn");
@@ -54,17 +55,16 @@ hitungSimulasi(20);
     const nav = document.querySelector("nav");
     const body = document.body;
 
-    // Buat overlay
+    // Overlay (latar belakang gelap)
     const overlay = document.createElement("div");
     overlay.classList.add("nav-overlay");
     document.body.appendChild(overlay);
 
-    // Toggle menu
     function openMenu() {
         hamburger.classList.add("active");
         navLinks.classList.add("active");
         overlay.classList.add("active");
-        body.style.overflow = "hidden"; // cegah scroll
+        body.style.overflow = "hidden";
     }
 
     function closeMenu() {
@@ -74,6 +74,7 @@ hitungSimulasi(20);
         body.style.overflow = "";
     }
 
+    // Toggle menu via hamburger
     hamburger.addEventListener("click", function () {
         if (navLinks.classList.contains("active")) {
             closeMenu();
@@ -82,14 +83,37 @@ hitungSimulasi(20);
         }
     });
 
-    // Tutup menu saat overlay diklik
+    // Tutup menu saat overlay (area di luar menu) diklik
     overlay.addEventListener("click", closeMenu);
 
-    // Tutup menu saat link diklik
-    const allNavLinks = navLinks.querySelectorAll("a");
-    allNavLinks.forEach((link) => {
-        link.addEventListener("click", function () {
-            closeMenu();
+    // Navigasi saat link di dalam menu diklik
+    const allNavLinks = navLinks.querySelectorAll('a');
+    allNavLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            const href = this.getAttribute('href');
+            
+            if (href && href.startsWith('#')) {
+                // Navigasi Internal (Smooth Scroll dengan Offset)
+                e.preventDefault();
+                closeMenu(); 
+
+                const target = document.querySelector(href);
+                if (target) {
+                    setTimeout(() => {
+                        const navHeight = nav.offsetHeight || 70;
+                        const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - navHeight;
+                        
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                    }, 400); // Tunggu animasi menu menutup
+                }
+            } else if (href && href !== '#') {
+                // Link Eksternal (Login, dll)
+                closeMenu();
+                // Browser akan otomatis melakukan redirect
+            }
         });
     });
 
@@ -100,7 +124,7 @@ hitungSimulasi(20);
         }
     });
 
-    // ─── SCROLL EVENT: tambah kelas .scrolled ──────
+    // Efek scroll pada navbar
     window.addEventListener("scroll", function () {
         if (window.scrollY > 50) {
             nav.classList.add("scrolled");

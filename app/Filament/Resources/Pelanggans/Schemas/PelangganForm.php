@@ -17,66 +17,26 @@ class PelangganForm
     {
         return $schema
             ->components([
-                // ── Grup Autentikasi ──
-                Select::make('user_id')
-                    ->label('Akun User')
-                    ->relationship(
-                        name: 'user', 
-                        titleAttribute: 'name',
-                        // Memfilter dropdown agar aman dari Error 500
-                        modifyQueryUsing: fn (Builder $query, string $operation) => $query
-                            // 1. Jika sedang membuat (create), jangan tampilkan user yang sudah punya data pelanggan
-                            ->when($operation === 'create', fn($q) => $q->whereDoesntHave('pelanggan'))
-                            // 2. Jangan tampilkan user yang punya role adminPDAM / super_admin
-                            ->whereDoesntHave('roles', fn($q) => $q->whereIn('name', ['admin-PDAM', 'super_admin']))
-                    )
-                    ->searchable()
-                    ->preload()
-                    ->disabledOn('edit')
-                    ->required()
-                    ->createOptionForm([
-                        TextInput::make('name')
-                            ->label('Nama Lengkap')
-                            ->required()
-                            ->maxLength(255),
-                        TextInput::make('email')
-                            ->label('Email')
-                            ->email()
-                            ->required()
-                            ->maxLength(255)
-                            ->unique('users', 'email'),
-                        TextInput::make('password')
-                            ->label('Password')
-                            ->password()
-                            ->required()
-                            ->minLength(8),
-                        Select::make('roles')
-                            ->relationship(
-                                name: 'roles', 
-                                titleAttribute: 'name',
-                                // Filter agar role admin-PDAM tidak muncul di pilihan manapun
-                                modifyQueryUsing: fn (Builder $query) => $query->where('name', '!=', 'admin-PDAM')
-                            )
-                            ->multiple()
-                            ->required()
-                            ->preload()
-                            ->searchable()
-                            ->label('Role/Hak Akses'),
-                    ])
-                    ->createOptionAction(fn (Action $action, string $operation) => $action->visible($operation === 'create')),
-
                 // ── Identitas Pelanggan ──
                 TextInput::make('no_pelanggan')
                     ->label('No. Pelanggan')
-                    // AUTO-GENERATE: Format PAM-TahunBulan-NomorUrut (Cth: PAM-2604-0001)
+                    // AUTO-GENERATE: 10 Digit Random Unique Number
                     ->default(function () {
-                        $lastId = Pelanggan::max('id') ?? 0;
-                        return 'PAM-' . date('ym') . '-' . str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
+                        do {
+                            $number = (string) mt_rand(1000000000, 9999999999);
+                        } while (\App\Models\Pelanggan::where('no_pelanggan', $number)->exists());
+                        return $number;
                     })
                     ->disabled() // Dikunci agar admin tidak bisa mengetik manual
                     ->dehydrated() // WAJIB ADA agar data yang dikunci tetap dikirim ke database
                     ->required()
                     ->unique(ignoreRecord: true),
+
+                TextInput::make('nama_lengkap')
+                    ->label('Nama Lengkap Pelanggan')
+                    ->required()
+                    ->maxLength(255)
+                    ->placeholder('Nama sesuai KTP / identitas resmi'),
 
                 // ── Kontak ──
                 TextInput::make('no_hp')

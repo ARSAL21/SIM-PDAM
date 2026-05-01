@@ -23,7 +23,7 @@ class PembayaransTable
                     ->copyable()
                     ->copyMessage('No. tagihan disalin!'),
 
-                TextColumn::make('tagihan.pelanggan.user.name')
+                TextColumn::make('tagihan.pelanggan.nama_lengkap')
                     ->label('Pelanggan')
                     ->searchable()
                     ->sortable(),

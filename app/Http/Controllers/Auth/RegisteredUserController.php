@@ -33,15 +33,76 @@ class RegisteredUserController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'nomor_pelanggan' => ['required', 'string', 'max:50', 'unique:users,nomor_pelanggan'],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'nomor_pelanggan' => ['required', 'string'],
+            'no_whatsapp' => ['required', 'string', 'max:20', 'regex:/^([0-9\s\-\+\(\)]*)$/'],
+            'password' => ['required', 'confirmed',
+            'nomor_pelanggan' => ['required', 'string', 'unique:users,nomor_pelanggan'], 
+            Rules\Password::defaults()],
+        ],
+        [
+            'name.required' => 'Nama wajib diisi.',
+            'email.required' => 'Email wajib diisi.',
+            'email.email' => 'Email tidak valid.',
+            'email.unique' => 'Email sudah terdaftar.',
+            'nomor_pelanggan.required' => 'Nomor Pelanggan wajib diisi.',
+            'no_whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
+            'password.required' => 'Password wajib diisi.',
+            'password.confirmed' => 'Password tidak cocok.',
+            'password.min' => 'Password minimal 8 karakter.',
+            'nomor_pelanggan.unique' => 'Nomor Pelanggan ini sudah terdaftar/diklaim oleh akun lain. Jika ini adalah kesalahan, silakan hubungi Admin.',
         ]);
 
+        // 2. Query Data Pelanggan berdasarkan Nomor Input
+        $pelanggan = \App\Models\Pelanggan::where('no_pelanggan', $request->nomor_pelanggan)->first();
+
+        //kalau tidak ada role == null
+        if (! \Spatie\Permission\Models\Role::where('name', 'pelanggan')->exists()) {
+            throw ValidationException::withMessages([
+                'nomor_pelanggan' => 'Terjadi kesalahan pada sistem. Silakan coba beberapa saat lagi atau hubungi Balai Desa.',
+            ]);
+        }
+
+        // 3. Validasi Kondisi A: Nomor tidak ditemukan di sistem
+        if (!$pelanggan) {
+            throw ValidationException::withMessages([
+                'nomor_pelanggan' => 'Nomor Pelanggan tidak ditemukan. Pastikan ketikkan sesuai struk asli.',
+            ]);
+        }
+
+        // 4. Validasi Kondisi B: Nomor sudah diklaim
+        if ($pelanggan->user_id !== null) {
+            throw ValidationException::withMessages([
+                'nomor_pelanggan' => 'Nomor Pelanggan ini sudah ditautkan ke akun lain.',
+            ]);
+        }
+
+        // 5. Validasi Kondisi C: Cross-check nama dengan data admin
+        if (mb_strtolower(trim($request->name)) !== mb_strtolower(trim($pelanggan->nama_lengkap))) {
+            throw ValidationException::withMessages([
+                'name' => 'Nama tidak sesuai dengan data pelanggan yang terdaftar di sistem. Pastikan nama diisi sesuai KTP.',
+            ]);
+        }
+
+        // 6. Create User
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'nomor_pelanggan' => $request->nomor_pelanggan,
+            'no_whatsapp' => $request->no_whatsapp,
             'password' => Hash::make($request->password),
+        ]);
+
+        // assign role pelanggan
+        $user->assignRole('pelanggan');
+
+        // verify email
+        $user->update([
+            'email_verified_at' => now(),
+        ]);
+
+        // 7. Tautkan (Claim) ID user baru ke tabel Pelanggan
+        $pelanggan->update([
+            'user_id' => $user->id
         ]);
 
         event(new Registered($user));

@@ -71,7 +71,7 @@ class PembayaranInfolist
                     ->icon('heroicon-o-user-circle')
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('tagihan.pelanggan.user.name')
+                        TextEntry::make('tagihan.pelanggan.nama_lengkap')
                             ->label('Nama Pelanggan')
                             ->weight(FontWeight::Bold)
                             ->icon('heroicon-m-user'),

@@ -31,7 +31,7 @@ class TagihansTable
                     ->copyable()
                     ->copyMessage('No. tagihan disalin!'),
 
-                TextColumn::make('pelanggan.user.name')
+                TextColumn::make('pelanggan.nama_lengkap')
                     ->label('Pelanggan')
                     ->searchable()
                     ->sortable(),
@@ -99,7 +99,7 @@ class TagihansTable
                             ->schema([
                                 \Filament\Forms\Components\Placeholder::make('info_pelanggan')
                                     ->label('Nama Pelanggan')
-                                    ->content($record->pelanggan?->user?->name ?? '-'),
+                                    ->content($record->pelanggan?->nama_lengkap ?? '-'),
 
                                 \Filament\Forms\Components\Placeholder::make('info_no_pelanggan')
                                     ->label('No. Pelanggan')

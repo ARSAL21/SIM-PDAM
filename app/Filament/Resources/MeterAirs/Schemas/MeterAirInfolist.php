@@ -22,7 +22,7 @@ class MeterAirInfolist
                     ->description('Identitas kepemilikan dan lokasi pemasangan meteran.')
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('pelanggan.user.name')
+                        TextEntry::make('pelanggan.nama_lengkap')
                             ->label('Nama Pemilik')
                             ->weight(FontWeight::Bold)
                             ->color('primary')
@@ -106,7 +106,7 @@ class MeterAirInfolist
                         // Tampilkan jika meter ini Rusak/Nonaktif/Diganti, 
                         // ATAU jika ia memiliki pendahulu (berarti ia adalah pengganti)
                         in_array($record->status, ['Rusak', 'Nonaktif', 'Diganti'])
-                        || \App\Models\MeterAir::where('pelanggan_id', $record->pelanggan_id)
+                        || \App\Models\MeterAir::query()->where('pelanggan_id', $record->pelanggan_id)
                             ->where('id', '<', $record->id)
                             ->whereIn('status', ['Rusak', 'Nonaktif', 'Diganti'])
                             ->exists()

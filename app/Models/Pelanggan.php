@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
-#[Fillable(['user_id', 'golongan_tarif_id', 'no_pelanggan', 'alamat', 'no_hp', 'status_aktif'])]
+#[Fillable(['user_id', 'golongan_tarif_id', 'no_pelanggan', 'nama_lengkap', 'alamat', 'no_hp', 'status_aktif'])]
 class Pelanggan extends Model
 {
     use HasFactory;
