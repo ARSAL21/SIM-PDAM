@@ -34,6 +34,7 @@ class RegisteredUserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'nomor_pelanggan' => ['required', 'string'],
+            'no_whatsapp' => ['required', 'string', 'max:20', 'regex:/^([0-9\s\-\+\(\)]*)$/'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
@@ -66,7 +67,16 @@ class RegisteredUserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'nomor_pelanggan' => $request->nomor_pelanggan,
+            'no_whatsapp' => $request->no_whatsapp,
             'password' => Hash::make($request->password),
+        ]);
+
+        // assign role pelanggan
+        $user->assignRole('pelanggan');
+
+        // verify email
+        $user->update([
+            'email_verified_at' => now(),
         ]);
 
         // 7. Tautkan (Claim) ID user baru ke tabel Pelanggan

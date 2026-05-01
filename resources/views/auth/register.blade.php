@@ -77,6 +77,25 @@
             </div>
         </div>
 
+        <!-- Input No WhatsApp -->
+        <div class="animate-fade-up opacity-0 delay-[175ms]">
+            <label class="block text-xs font-semibold text-[#0D2B45] mb-1">Nomor WhatsApp</label>
+            <div class="relative group">
+                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="w-4 h-4 text-[#5A7080] group-focus-within:text-[#1AACB4] transition" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-2.896-1.596-5.281-3.981-6.877-6.877l1.293-.97c.362-.271.527-.733.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                    </svg>
+                </span>
+                <input name="no_whatsapp" type="tel" value="{{ old('no_whatsapp') }}" required
+                       class="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-[#E8DFD0] rounded-lg focus:ring-2 focus:ring-[#1AACB4]/30 focus:border-[#1AACB4] transition outline-none"
+                       placeholder="Contoh: 081234567890">
+            </div>
+            <!-- Penjelasan fungsi data untuk membangun Trust -->
+            <p class="text-[10px] text-[#5A7080] mt-1.5 leading-relaxed">
+                *Nomor WhatsApp digunakan oleh sistem untuk mengirimkan bukti pembayaran tagihan Anda secara otomatis.
+            </p>
+        </div>
+
         <!-- Row 2: Password + Konfirmasi (side by side) -->
         <div class="grid grid-cols-2 gap-3 animate-fade-up opacity-0 delay-200">
 

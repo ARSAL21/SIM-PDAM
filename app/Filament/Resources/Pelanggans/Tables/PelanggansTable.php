@@ -8,6 +8,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\Filter;
@@ -29,6 +30,17 @@ class PelanggansTable
                     ->label('Nama Pelanggan')
                     ->searchable()
                     ->sortable(),
+                
+                IconColumn::make('is_claimed')
+                    ->label('Status Akun Web')
+                    ->boolean()
+                    // Virtual state: jika user_id tidak null, berarti true (terklaim)
+                    ->getStateUsing(fn ($record) => $record->user_id !== null)
+                    ->trueIcon('heroicon-o-check-badge')
+                    ->falseIcon('heroicon-o-clock')
+                    ->trueColor('success')
+                    ->falseColor('warning')
+                    ->tooltip(fn ($state) => $state ? 'Sudah ditautkan ke akun warga' : 'Belum registrasi web'),
 
                 TextColumn::make('no_pelanggan')
                     ->label('No. Pelanggan')

@@ -20,10 +20,12 @@ class PelangganForm
                 // ── Identitas Pelanggan ──
                 TextInput::make('no_pelanggan')
                     ->label('No. Pelanggan')
-                    // AUTO-GENERATE: Format PAM-TahunBulan-NomorUrut (Cth: PAM-2604-0001)
+                    // AUTO-GENERATE: 10 Digit Random Unique Number
                     ->default(function () {
-                        $lastId = Pelanggan::max('id') ?? 0;
-                        return 'PAM-' . date('ym') . '-' . str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
+                        do {
+                            $number = (string) mt_rand(1000000000, 9999999999);
+                        } while (\App\Models\Pelanggan::where('no_pelanggan', $number)->exists());
+                        return $number;
                     })
                     ->disabled() // Dikunci agar admin tidak bisa mengetik manual
                     ->dehydrated() // WAJIB ADA agar data yang dikunci tetap dikirim ke database
