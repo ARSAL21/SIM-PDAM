@@ -35,11 +35,32 @@ class RegisteredUserController extends Controller
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'nomor_pelanggan' => ['required', 'string'],
             'no_whatsapp' => ['required', 'string', 'max:20', 'regex:/^([0-9\s\-\+\(\)]*)$/'],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'password' => ['required', 'confirmed',
+            'nomor_pelanggan' => ['required', 'string', 'unique:users,nomor_pelanggan'], 
+            Rules\Password::defaults()],
+        ],
+        [
+            'name.required' => 'Nama wajib diisi.',
+            'email.required' => 'Email wajib diisi.',
+            'email.email' => 'Email tidak valid.',
+            'email.unique' => 'Email sudah terdaftar.',
+            'nomor_pelanggan.required' => 'Nomor Pelanggan wajib diisi.',
+            'no_whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
+            'password.required' => 'Password wajib diisi.',
+            'password.confirmed' => 'Password tidak cocok.',
+            'password.min' => 'Password minimal 8 karakter.',
+            'nomor_pelanggan.unique' => 'Nomor Pelanggan ini sudah terdaftar/diklaim oleh akun lain. Jika ini adalah kesalahan, silakan hubungi Admin.',
         ]);
 
         // 2. Query Data Pelanggan berdasarkan Nomor Input
         $pelanggan = \App\Models\Pelanggan::where('no_pelanggan', $request->nomor_pelanggan)->first();
+
+        //kalau tidak ada role == null
+        if (! \Spatie\Permission\Models\Role::where('name', 'pelanggan')->exists()) {
+            throw ValidationException::withMessages([
+                'nomor_pelanggan' => 'Terjadi kesalahan pada sistem. Silakan coba beberapa saat lagi atau hubungi Balai Desa.',
+            ]);
+        }
 
         // 3. Validasi Kondisi A: Nomor tidak ditemukan di sistem
         if (!$pelanggan) {
