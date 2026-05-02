@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 #[Fillable([
     'tagihan_id',
@@ -17,10 +19,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'diverifikasi_pada',
     'catatan_admin',
 ])]
-class Pembayaran extends Model
+class Pembayaran extends Model implements HasMedia
 {
-    use HasFactory;
-     protected $table = 'pembayaran';
+    use HasFactory, InteractsWithMedia;
+    protected $table = 'pembayaran';
     protected function casts(): array
     {
         return [
